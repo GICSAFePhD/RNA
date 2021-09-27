@@ -12,11 +12,26 @@ IGNORE = {None}
 
 #%%%
 def RNA(RML,INPUT_FILE,OUTPUT_FILE):
+    print("#"*20+" Starting Railway Network Analyzer "+"#"*20)
+    
     print("Reading .railML file")
     root = load_xml(INPUT_FILE)   #A RELATIVE PATH DOESN'T WORK FOR PREVIEW!
     print("Creating railML object")
     get_branches(RML,root,test = False)
     
+    #print(dir(RML.Common.Positioning.GeometricPositioningSystems.GeometricPositioningSystem))
+    
+    
+        
+    #x = RML.Infrastructure.Topology.Networks.Network[0]
+    #y = get_attributes(x)
+    #print(x,y)
+    #for i in y:
+    #    z = getattr(x,i)
+    #    if z != None:
+    #        print(i,z)   
+
+
     
     print("Exporting .railML file")
     with open(OUTPUT_FILE, "w") as f:        
