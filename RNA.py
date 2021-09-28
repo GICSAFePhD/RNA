@@ -48,36 +48,63 @@ def analyzing_graph(netElements,netRelations):
     
     for netElement in netElements:
         netElementsId.append(netElement.Id)
-    print(f'  Nodes:{len(netElementsId)}')
+    print(f'  Nodes: {len(netElementsId)} | {netElementsId}')
     
     for netRelation in netRelations:
         netRelationsId.append(netRelation.Id)
-    print(f'  Edges:{len(netRelationsId)}')
+    print(f'  Edges: {len(netRelationsId)}')
     
     neighbours = {}
-    print(neighbours)
+    switches = {}
+    
+    for i in netElementsId:
+        neighbours[i] = []
     
     for netElement in netElements:
         for i in netElement.Relation:
             [begin, end, name] = identify_relations(i.Ref)
             
-            if netElement.Id == begin:  
-                print(f'  {begin} > {end} in {name}')
-            else:
-                print(f'  {begin} < {end} in {name}')
-
-            if begin not in neighbours.keys():
-                neighbours[begin] = []
-            if end not in neighbours.keys():
-                neighbours[end] = []
-                
+            if name not in switches.keys():
+                switches[name] = []
+            
             if end not in neighbours[begin]:
                 neighbours[begin].append(end)
-    
+                
             if begin not in neighbours[end]:
                 neighbours[end].append(begin)
                 
-    print(neighbours)
+            if begin not in switches[name]:
+                switches[name].append(begin)
+            
+            if end not in switches[name]:
+                switches[name].append(end)
+    
+    print(f'  Swtiches: {len(switches)} | {[i for i in switches]}')
+    
+    
+    limits = []
+    
+    for j in switches:
+        for i in switches[j]:
+        
+            if i in limits:
+                limits.remove(i)
+            else:
+                limits.append(i)
+        
+        
+    print(f'  Limits: {len(limits)} | {limits}')
+    
+    
+    
+    
+    for i in neighbours:
+        print(f'  Node {i} has {len(neighbours[i])} neighbours: {neighbours[i]}')
+    
+    for i in switches:
+        print(f'  Switch {i} touches {len(switches[i])} nodes: {switches[i]}')
+    
+    
     
     
 def identify_relations(reference):
