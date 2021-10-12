@@ -19,17 +19,6 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,test = False):
         print("Analyzing railML object")
     analyzing_object(RML)
     
-    
-    #print(dir(RML.Common.Positioning.GeometricPositioningSystems.GeometricPositioningSystem))
-            
-    #x = RML.Infrastructure.Topology.Networks.Network[0]
-    #y = get_attributes(x)
-    #print(x,y)
-    #for i in y:
-    #    z = getattr(x,i)
-    #    if z != None:
-    #        print(i,z)   
-
     if test:
         print("Exporting .railML file")
     with open(OUTPUT_FILE, "w") as f:        
@@ -43,19 +32,36 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,test = False):
 
 #%%%
 def analyzing_graph(netElements,netRelations):
+        
+    netElementsId = get_nodes(netElements)
+    netRelationsId = get_relations(netRelations)
+    neighbours,switches = get_neighbours_and_switches(netElements) 
+    limits = get_limits(switches)
+    
+    return netElementsId,neighbours,switches,limits
+
+#%%%   
+def get_nodes(netElements):
     netElementsId = []
-    netRelationsId = []
     
     for netElement in netElements:
         netElementsId.append(netElement.Id)
-    print(f'  Nodes: {len(netElementsId)} | {netElementsId}')
+        
+    return netElementsId  
+
+def get_relations(netRelations):
+    netRelationsId = []
     
     for netRelation in netRelations:
         netRelationsId.append(netRelation.Id)
-    print(f'  Edges: {len(netRelationsId)}')
-    
+        
+    return netRelationsId  
+
+def get_neighbours_and_switches(netElements):
     neighbours = {}
     switches = {}
+    
+    netElementsId = get_nodes(netElements)
     
     for i in netElementsId:
         neighbours[i] = []
@@ -78,9 +84,10 @@ def analyzing_graph(netElements,netRelations):
             
             if end not in switches[name]:
                 switches[name].append(end)
-    
-    print(f'  Swtiches: {len(switches)} | {[i for i in switches]}')
-    
+                
+    return neighbours, switches
+
+def get_limits(switches):
     
     limits = []
     
@@ -90,22 +97,10 @@ def analyzing_graph(netElements,netRelations):
             if i in limits:
                 limits.remove(i)
             else:
+                
                 limits.append(i)
-        
-        
-    print(f'  Limits: {len(limits)} | {limits}')
     
-    
-    
-    
-    for i in neighbours:
-        print(f'  Node {i} has {len(neighbours[i])} neighbours: {neighbours[i]}')
-    
-    for i in switches:
-        print(f'  Switch {i} touches {len(switches[i])} nodes: {switches[i]}')
-    
-    
-    
+    return limits
     
 def identify_relations(reference):
     
@@ -123,7 +118,94 @@ def identify_relations(reference):
     
     return [begin,end,name]
     
+def detect_borders(infrastructure):
+    borders = {}
     
+    for i in infrastructure.Borders[0].Border:
+        if i.Id not in borders.keys():
+            borders[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"isOpenEnd":i.IsOpenEnd,"Type":i.Type}
+    
+    return borders    
+
+def detect_bufferStops(infrastructure):
+    bufferStops = {}
+    
+    for i in [infrastructure.BufferStops[0].BufferStop]:
+        if i.Id not in bufferStops.keys():
+            bufferStops[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
+    
+    return bufferStops
+
+def detect_signalsIS(infrastructure):
+    signalsIS = {}
+    
+    for i in infrastructure.SignalsIS[0].SignalIS:
+        if i.Id not in signalsIS.keys():
+            signalsIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,
+                                        "Direction":i.SpotLocation[0].ApplicationDirection,
+                                        "Position":i.SignalConstruction[0].PositionAtTrack}
+    
+    return signalsIS
+
+def detect_switchesIS(infrastructure):
+    switchesIS = {}
+        
+    for i in infrastructure.SwitchesIS[0].SwitchIS:
+        if i.Id not in switchesIS.keys():
+            switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
+                                        "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
+                                        "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef}
+    
+    return switchesIS
+
+def detect_tracks(infrastructure):
+    tracks = {}
+    
+    for i in infrastructure.Tracks[0].Track:
+        if i.Id not in tracks.keys():
+            tracks[i.Name[0].Name] = {"Node":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
+    
+    return tracks
+
+
+def detect_trainDetectionElements(infrastructure):
+    trainDetectionElements = {}
+    
+    #print(infrastructure.SwitchesIS[0].SwitchIS)
+    
+    for i in infrastructure.TrainDetectionElements[0].TrainDetectionElement:
+        #print(i.Name[0].Name)
+        if i.Id not in trainDetectionElements.keys():
+            trainDetectionElements[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef}
+    
+    return trainDetectionElements
+
+
+def analyzing_infrastructure(infrastructure):
+    
+    # borders
+    borders = detect_borders(infrastructure)
+
+    # bufferStops
+    bufferStops = detect_bufferStops(infrastructure)
+    
+    # signalsIS
+    signalsIS = detect_signalsIS(infrastructure)
+
+    # switchesIS
+    switchesIS = detect_switchesIS(infrastructure)
+
+    # tracks
+    tracks = detect_tracks(infrastructure)
+    
+    # trainDetectionElements
+    trainDetectionElements = detect_trainDetectionElements(infrastructure)
+    
+    print(trainDetectionElements)
+    
+    #print(infrastructure)
+
+    return borders,bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements
 
 #%%%
 def analyzing_object(object):
@@ -131,10 +213,54 @@ def analyzing_object(object):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements.NetElement
     netRelations = topology.NetRelations.NetRelation
+    infrastructure = object.Infrastructure.FunctionalInfrastructure
 
-
-    print(" Analyzing graph")
-    analyzing_graph(netElements,netRelations)
+    print(" Analyzing graph --> Graph.RNA")
+    netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
     
+    print(" Analyzing infrastructure --> Infrastructure.RNA")
+    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
     
-    
+    with open("F:\PhD\RailML\\Graph.RNA", "w") as f:        
+        f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+len(bufferStops)}\n')
+        
+        for i in netElementsId:
+            f.write(f'Node {i}:\n')
+            for j in tracks:
+                if i == tracks[j]["Node"]:
+                    f.write(f'\tTrack = {j}\n')
+            for j in trainDetectionElements:
+                if i == trainDetectionElements[j]["Node"]:
+                    f.write(f'\tTrainDetectionElements = {j}\n')        
+                    
+            if i in borders:
+                f.write(f'\tType = Border --> {borders[i]["Id"]}\n')
+            if i in bufferStops:
+                f.write(f'\tType = BufferStop --> {bufferStops[i]["Id"]}\n')
+                
+            f.write(f'\tNeighbours = {len(neighbours[i])} --> {neighbours[i]}\n')
+            
+            for j in signalsIS:
+                if i == signalsIS[j]["Node"]:
+                    f.write(f'\tSignals -> {j}\n')
+                    f.write(f'\t\tDirection -> {signalsIS[j]["Direction"]}\n')
+                    f.write(f'\t\tPosition -> {signalsIS[j]["Position"]}\n')
+            
+            for j in switchesIS:
+                if i == switchesIS[j]["Node"]:
+                    f.write(f'\tSwitches = {j}\n')
+                    
+                    left = identify_relations(switchesIS[j]["LeftBranch"])[:-1]
+                    right = identify_relations(switchesIS[j]["RightBranch"])[:-1]
+                    left.remove(i)
+                    right.remove(i)
+                    
+                    if switchesIS[j]["ContinueCourse"] == "right":
+                        f.write(f'\t\tContinueCourse -> right -> {right[0]}\n')
+                        f.write(f'\t\tBranchCourse -> left -> {left[0]}\n')
+                    else:
+                        f.write(f'\t\tContinueCourse -> left -> {left[0]}\n')
+                        f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
+            
+            
+        f.close()
