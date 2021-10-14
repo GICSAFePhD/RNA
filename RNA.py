@@ -29,6 +29,48 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,test = False):
         
         f.close()
 
+#%%
+def add_sections(graph,node,zones):
+    zones_number = len(zones)
+    zones_number += 1
+    zones[zones_number] = []
+    zones[zones_number].append(node)
+    zones[zones_number].extend(graph[node])
+    
+    return zones_number
+#%%%
+def analyze_connectedness(neighbours):
+    zones = {}
+    zones_number = len(zones)
+
+    for node in neighbours:
+        if zones_number == 0:
+            zones_number = add_sections(neighbours,node,zones)
+        #print(f'Node:{node}')
+        
+        for zone in zones:
+            new_zone = True
+            #print(f'Zone_{zone}:{zones[zone]}')
+            
+            if node in zones[zone]:
+                new_zone = False
+                continue
+            
+            if list(set(neighbours[node]) & set(zones[zone])):
+                zones[zones_number].append(node)
+                zones[zones_number].extend([x for x in neighbours[node] if (x not in zones[zone])])
+                new_zone = False
+        
+        if new_zone: 
+            zones_number = add_sections(neighbours,node,zones)
+            #print(f'Zone_{zones_number}:{zones[zones_number]}')
+        
+    #print(f'Zones:{zones}')
+    if len(zones) > 1:
+        return False
+    else:
+        return True
+
 
 #%%%
 def analyzing_graph(netElements,netRelations):
@@ -38,6 +80,10 @@ def analyzing_graph(netElements,netRelations):
     neighbours,switches = get_neighbours_and_switches(netElements) 
     limits = get_limits(switches)
     
+    x = '' if (analyze_connectedness(neighbours)) else ('not')
+
+    print(f' The network is {x}connected')
+
     return netElementsId,neighbours,switches,limits
 
 #%%%   
@@ -200,28 +246,13 @@ def analyzing_infrastructure(infrastructure):
     
     # trainDetectionElements
     trainDetectionElements = detect_trainDetectionElements(infrastructure)
-    
-    print(trainDetectionElements)
-    
-    #print(infrastructure)
 
     return borders,bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements
 
 #%%%
-def analyzing_object(object):
+def export_analysis(file,netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements):
     
-    topology = object.Infrastructure.Topology
-    netElements = topology.NetElements.NetElement
-    netRelations = topology.NetRelations.NetRelation
-    infrastructure = object.Infrastructure.FunctionalInfrastructure
-
-    print(" Analyzing graph --> Graph.RNA")
-    netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
-    
-    print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
-    
-    with open("F:\PhD\RailML\\Graph.RNA", "w") as f:        
+    with open(file, "w") as f:        
         f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+len(bufferStops)}\n')
         
         for i in netElementsId:
@@ -261,6 +292,20 @@ def analyzing_object(object):
                     else:
                         f.write(f'\t\tContinueCourse -> left -> {left[0]}\n')
                         f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
-            
-            
         f.close()
+#%%%
+def analyzing_object(object):
+    
+    topology = object.Infrastructure.Topology
+    netElements = topology.NetElements.NetElement
+    netRelations = topology.NetRelations.NetRelation
+    infrastructure = object.Infrastructure.FunctionalInfrastructure
+
+    print(" Analyzing graph --> Graph.RNA")
+    netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
+        
+    print(" Analyzing infrastructure --> Infrastructure.RNA")
+    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    
+    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
+    
