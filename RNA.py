@@ -13,7 +13,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,test = False):
     
     if test:
         print("Creating railML object")
-    get_branches(RML,root,test = False)
+    get_branches(RML,root,test = True)
     
     if test:
         print("Analyzing railML object")
@@ -80,7 +80,9 @@ def analyzing_graph(netElements,netRelations):
     neighbours,switches = get_neighbours_and_switches(netElements) 
     limits = get_limits(switches)
     
-    x = '' if (analyze_connectedness(neighbours)) else ('not')
+    print(neighbours)
+    
+    x = '' if (analyze_connectedness(neighbours)) else ('not ')
 
     print(f' The network is {x}connected')
 
@@ -113,23 +115,25 @@ def get_neighbours_and_switches(netElements):
         neighbours[i] = []
     
     for netElement in netElements:
-        for i in netElement.Relation:
-            [begin, end, name] = identify_relations(i.Ref)
-            
-            if name not in switches.keys():
-                switches[name] = []
-            
-            if end not in neighbours[begin]:
-                neighbours[begin].append(end)
+        #print(netElement.AssociatedPositioningSystem)
+        if netElement.Relation != None:
+            for i in netElement.Relation:
+                [begin, end, name] = identify_relations(i.Ref)
                 
-            if begin not in neighbours[end]:
-                neighbours[end].append(begin)
+                if name not in switches.keys():
+                    switches[name] = []
                 
-            if begin not in switches[name]:
-                switches[name].append(begin)
-            
-            if end not in switches[name]:
-                switches[name].append(end)
+                if end not in neighbours[begin]:
+                    neighbours[begin].append(end)
+                    
+                if begin not in neighbours[end]:
+                    neighbours[end].append(begin)
+                    
+                if begin not in switches[name]:
+                    switches[name].append(begin)
+                
+                if end not in switches[name]:
+                    switches[name].append(end)
                 
     return neighbours, switches
 
@@ -149,83 +153,91 @@ def get_limits(switches):
     return limits
     
 def identify_relations(reference):
-    
     begin = end = name = ""
 
     reference = reference.replace('nr_','')
-    
     begin = reference[0:reference[1:].find('ne')+1]
-    
     reference = reference.replace(begin,'')
-    
     end = reference[0:reference[1:].find('_')+1]
-    
     name = reference.replace(end+'_','')
-    
+
     return [begin,end,name]
     
 def detect_borders(infrastructure):
     borders = {}
     
-    for i in infrastructure.Borders[0].Border:
-        if i.Id not in borders.keys():
-            borders[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"isOpenEnd":i.IsOpenEnd,"Type":i.Type}
+    #return borders 
     
-    return borders    
+    if infrastructure.Borders != None:
+        for i in infrastructure.Borders[0].Border:
+            if i.Id not in borders.keys():
+                borders[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"isOpenEnd":i.IsOpenEnd,"Type":i.Type}
+    
+    return borders 
 
 def detect_bufferStops(infrastructure):
     bufferStops = {}
     
-    for i in [infrastructure.BufferStops[0].BufferStop]:
-        if i.Id not in bufferStops.keys():
-            bufferStops[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
+    if infrastructure.BufferStops != None:
+        for i in [infrastructure.BufferStops[0].BufferStop]:
+            if i.Id not in bufferStops.keys():
+                bufferStops[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
     
     return bufferStops
 
 def detect_signalsIS(infrastructure):
     signalsIS = {}
     
-    for i in infrastructure.SignalsIS[0].SignalIS:
-        if i.Id not in signalsIS.keys():
-            signalsIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,
-                                        "Direction":i.SpotLocation[0].ApplicationDirection,
-                                        "Position":i.SignalConstruction[0].PositionAtTrack}
+    #return signalsIS
+
+    if infrastructure.SignalsIS != None:
+        for i in infrastructure.SignalsIS[0].SignalIS:
+            if i.Id not in signalsIS.keys():
+                signalsIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,
+                                            "Direction":i.SpotLocation[0].ApplicationDirection,
+                                            "Position":i.SignalConstruction[0].PositionAtTrack}
     
     return signalsIS
 
 def detect_switchesIS(infrastructure):
     switchesIS = {}
-        
-    for i in infrastructure.SwitchesIS[0].SwitchIS:
-        if i.Id not in switchesIS.keys():
-            switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
-                                        "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
-                                        "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef}
+    
+    #return switchesIS
+
+    if infrastructure.SwitchesIS != None:
+        for i in infrastructure.SwitchesIS[0].SwitchIS:
+            if i.Id not in switchesIS.keys():
+                switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
+                                            "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
+                                            "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef}
     
     return switchesIS
 
 def detect_tracks(infrastructure):
     tracks = {}
     
-    for i in infrastructure.Tracks[0].Track:
-        if i.Id not in tracks.keys():
-            tracks[i.Name[0].Name] = {"Node":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
+    #return tracks
+
+    if infrastructure.Tracks != None:
+        for i in infrastructure.Tracks[0].Track:
+            if i.Id not in tracks.keys():
+                tracks[i.Name[0].Name] = {"Node":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
     
     return tracks
-
 
 def detect_trainDetectionElements(infrastructure):
     trainDetectionElements = {}
     
+    #return trainDetectionElements
+
     #print(infrastructure.SwitchesIS[0].SwitchIS)
-    
-    for i in infrastructure.TrainDetectionElements[0].TrainDetectionElement:
-        #print(i.Name[0].Name)
-        if i.Id not in trainDetectionElements.keys():
-            trainDetectionElements[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef}
+    if infrastructure.TrainDetectionElements != None:
+        for i in infrastructure.TrainDetectionElements[0].TrainDetectionElement:
+            #print(i.Name[0].Name)
+            if i.Id not in trainDetectionElements.keys():
+                trainDetectionElements[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef}
     
     return trainDetectionElements
-
 
 def analyzing_infrastructure(infrastructure):
     
@@ -295,17 +307,16 @@ def export_analysis(file,netElementsId,neighbours,borders, bufferStops,signalsIS
         f.close()
 #%%%
 def analyzing_object(object):
-    
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements.NetElement
-    netRelations = topology.NetRelations.NetRelation
+    netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
     infrastructure = object.Infrastructure.FunctionalInfrastructure
 
     print(" Analyzing graph --> Graph.RNA")
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    #borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
     
-    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
+    #export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
     
