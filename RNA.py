@@ -13,7 +13,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,test = False):
     
     if test:
         print("Creating railML object")
-    get_branches(RML,root,test = True)
+    get_branches(RML,root,test = False)
     
     if test:
         print("Analyzing railML object")
@@ -46,7 +46,7 @@ def analyze_connectedness(neighbours):
     for node in neighbours:
         if zones_number == 0:
             zones_number = add_sections(neighbours,node,zones)
-        #print(f'Node:{node}')
+        #print(f'Node:{node}|{neighbours[node]}')
         
         for zone in zones:
             new_zone = True
@@ -54,6 +54,7 @@ def analyze_connectedness(neighbours):
             
             if node in zones[zone]:
                 new_zone = False
+                zones[zone].extend([x for x in neighbours[node] if (x not in zones[zone])])
                 continue
             
             if list(set(neighbours[node]) & set(zones[zone])):
@@ -63,14 +64,21 @@ def analyze_connectedness(neighbours):
         
         if new_zone: 
             zones_number = add_sections(neighbours,node,zones)
-            #print(f'Zone_{zones_number}:{zones[zones_number]}')
-        
-    #print(f'Zones:{zones}')
+        #print(f'Zones:{zones}')
+    
+    # Combine zones with common nodes
+    for zone in range(1,len(zones)+1):
+        if zone+1 <= len(zones):
+            if list(set(zones[zone]) & set(zones[zone+1])):
+                zones[zone].extend([x for x in zones[zone+1] if (x not in zones[zone])])
+                del zones[zone+1]
+    
+    print(f' Zones:{zones}')
+    
     if len(zones) > 1:
         return False
     else:
         return True
-
 
 #%%%
 def analyzing_graph(netElements,netRelations):
@@ -79,8 +87,6 @@ def analyzing_graph(netElements,netRelations):
     netRelationsId = get_relations(netRelations)
     neighbours,switches = get_neighbours_and_switches(netElements) 
     limits = get_limits(switches)
-    
-    print(neighbours)
     
     x = '' if (analyze_connectedness(neighbours)) else ('not ')
 
@@ -93,7 +99,8 @@ def get_nodes(netElements):
     netElementsId = []
     
     for netElement in netElements:
-        netElementsId.append(netElement.Id)
+        if (netElement.Id[2].isdigit()):        # Only MICRO
+            netElementsId.append(netElement.Id)
         
     return netElementsId  
 
@@ -118,6 +125,10 @@ def get_neighbours_and_switches(netElements):
         #print(netElement.AssociatedPositioningSystem)
         if netElement.Relation != None:
             for i in netElement.Relation:
+                
+                if (not netElement.Id[2].isdigit()): 
+                    continue
+                
                 [begin, end, name] = identify_relations(i.Ref)
                 
                 if name not in switches.keys():
@@ -247,6 +258,16 @@ def analyzing_infrastructure(infrastructure):
     # bufferStops
     bufferStops = detect_bufferStops(infrastructure)
     
+    # derailersIS
+    
+    # levelCrossingsIS
+    
+    # lines
+    
+    # operationalPoints
+    
+    # platforms
+    
     # signalsIS
     signalsIS = detect_signalsIS(infrastructure)
 
@@ -260,7 +281,6 @@ def analyzing_infrastructure(infrastructure):
     trainDetectionElements = detect_trainDetectionElements(infrastructure)
 
     return borders,bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements
-
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements):
     
@@ -316,7 +336,6 @@ def analyzing_object(object):
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    #borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
     
-    #export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
-    
+    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
