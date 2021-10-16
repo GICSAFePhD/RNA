@@ -182,7 +182,7 @@ def detect_borders(infrastructure):
     if infrastructure.Borders != None:
         for i in infrastructure.Borders[0].Border:
             if i.Id not in borders.keys():
-                borders[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"isOpenEnd":i.IsOpenEnd,"Type":i.Type}
+                borders[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"IsOpenEnd":i.IsOpenEnd,"Type":i.Type}
     
     return borders 
 
@@ -196,10 +196,60 @@ def detect_bufferStops(infrastructure):
     
     return bufferStops
 
+def detect_derailersIS(infrastructure):
+    derailersIS = {} 
+
+    if infrastructure.DerailersIS != None:
+        for i in infrastructure.DerailersIS[0].DerailerIS:
+            if i.Id not in derailersIS.keys():
+                derailersIS[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Side":i.DerailSide}
+
+    return derailersIS
+
+def detect_levelCrossingsIS(infrastructure):
+    levelCrossingsIS = {}
+
+    if infrastructure.LevelCrossingsIS != None:
+        for i in infrastructure.LevelCrossingsIS[0].LevelCrossingIS:
+            if i.Id not in levelCrossingsIS.keys():
+                levelCrossingsIS[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Lights":i.Protection[0].Lights,"Acoustic":i.Protection[0].Acoustic,"Protection":i.Protection[0].HasActiveProtection,"Barriers":i.Protection[0].Barriers}
+    
+    return levelCrossingsIS
+
+def detect_lines(infrastructure):
+    lines = {}
+
+    if infrastructure.Lines != None:
+        for i in infrastructure.Lines[0].Line:
+            if i.Id not in lines.keys():
+                lines[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.LineType}
+    
+    return lines
+
+def detect_operationalPoints(infrastructure):
+    operationalPoints = {}
+    
+    return operationalPoints    #IGNORE! IT IS FOR MACRO LEVEL!
+
+    if infrastructure.BufferStops != None:
+        for i in [infrastructure.BufferStops[0].BufferStop]:
+            if i.Id not in operationalPoints.keys():
+                operationalPoints[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
+    
+    return operationalPoints
+
+def detect_platforms(infrastructure):
+    platforms = {}
+
+    if infrastructure.Platforms != None:
+        for i in infrastructure.Platforms[0].Platform:
+            if i.Id not in platforms.keys():
+                platforms[i.LinearLocation[0].AssociatedNetElement[0].NetElementRef] = {"Id":i.Id,"Side":i.LinearLocation[0].AssociatedNetElement[0].LinearCoordinateBegin.LateralSide}
+    
+    return platforms
+
 def detect_signalsIS(infrastructure):
     signalsIS = {}
-    
-    #return signalsIS
 
     if infrastructure.SignalsIS != None:
         for i in infrastructure.SignalsIS[0].SignalIS:
@@ -212,8 +262,6 @@ def detect_signalsIS(infrastructure):
 
 def detect_switchesIS(infrastructure):
     switchesIS = {}
-    
-    #return switchesIS
 
     if infrastructure.SwitchesIS != None:
         for i in infrastructure.SwitchesIS[0].SwitchIS:
@@ -226,8 +274,6 @@ def detect_switchesIS(infrastructure):
 
 def detect_tracks(infrastructure):
     tracks = {}
-    
-    #return tracks
 
     if infrastructure.Tracks != None:
         for i in infrastructure.Tracks[0].Track:
@@ -239,14 +285,13 @@ def detect_tracks(infrastructure):
 def detect_trainDetectionElements(infrastructure):
     trainDetectionElements = {}
     
-    #return trainDetectionElements
-
-    #print(infrastructure.SwitchesIS[0].SwitchIS)
     if infrastructure.TrainDetectionElements != None:
         for i in infrastructure.TrainDetectionElements[0].TrainDetectionElement:
-            #print(i.Name[0].Name)
             if i.Id not in trainDetectionElements.keys():
-                trainDetectionElements[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef}
+                if i.SpotLocation[0].LinearCoordinate != None:
+                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Type":i.Type,"Side":i.SpotLocation[0].LinearCoordinate[0].LateralSide}
+                else:
+                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Type":i.Type}
     
     return trainDetectionElements
 
@@ -259,14 +304,19 @@ def analyzing_infrastructure(infrastructure):
     bufferStops = detect_bufferStops(infrastructure)
     
     # derailersIS
+    derailersIS = detect_derailersIS(infrastructure)
     
     # levelCrossingsIS
+    levelCrossingsIS = detect_levelCrossingsIS(infrastructure)
     
     # lines
+    lines = detect_lines(infrastructure)
     
     # operationalPoints
+    operationalPoints = detect_operationalPoints(infrastructure)    # TODO FOR MESO
     
     # platforms
+    platforms = detect_platforms(infrastructure)
     
     # signalsIS
     signalsIS = detect_signalsIS(infrastructure)
@@ -280,29 +330,59 @@ def analyzing_infrastructure(infrastructure):
     # trainDetectionElements
     trainDetectionElements = detect_trainDetectionElements(infrastructure)
 
-    return borders,bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements
+    return borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
 #%%%
-def export_analysis(file,netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements):
+def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
     
+    print(trainDetectionElements)
     with open(file, "w") as f:        
         f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+len(bufferStops)}\n')
         
         for i in netElementsId:
             f.write(f'Node {i}:\n')
+            for j in lines:
+                f.write(f'\tLines -> {lines[j]["Id"]}\n')
             for j in tracks:
                 if i == tracks[j]["Node"]:
                     f.write(f'\tTrack = {j}\n')
+            
             for j in trainDetectionElements:
                 if i == trainDetectionElements[j]["Node"]:
-                    f.write(f'\tTrainDetectionElements = {j}\n')        
+                    f.write(f'\tTrainDetectionElements -> {j}\n')        
+                    f.write(f'\t\tType -> {trainDetectionElements[j]["Type"]}\n')
+                    if "Side" in trainDetectionElements[j]:
+                        f.write(f'\t\tSide -> {trainDetectionElements[j]["Side"]}\n')
                     
-            if i in borders:
-                f.write(f'\tType = Border --> {borders[i]["Id"]}\n')
-            if i in bufferStops:
-                f.write(f'\tType = BufferStop --> {bufferStops[i]["Id"]}\n')
-                
-            f.write(f'\tNeighbours = {len(neighbours[i])} --> {neighbours[i]}\n')
+            for j in derailersIS:
+                if i == j:
+                    f.write(f'\tDerailer -> {derailersIS[i]["Id"]}\n')
+                    f.write(f'\t\t Side -> {derailersIS[i]["Side"]}\n')
+                    
+            for j in borders:
+                if i == borders[j]["Node"]:
+                    f.write(f'\tType = Border -> {j}\n')
+                    f.write(f'\t\tType -> {borders[j]["Type"]}\n')
+                    f.write(f'\t\tIsOpenEnd -> {borders[j]["IsOpenEnd"]}\n')
             
+                
+            if i in bufferStops:
+                f.write(f'\tType = BufferStop -> {bufferStops[i]["Id"]}\n')
+                
+            f.write(f'\tNeighbours = {len(neighbours[i])} -> {neighbours[i]}\n')
+            
+            for j in platforms:
+                if i == j:
+                    f.write(f'\tPlatform  -> {platforms[j]["Id"]}\n')
+                    f.write(f'\t\tSide -> {platforms[j]["Side"]}\n')
+            
+            for j in levelCrossingsIS:
+                if i == j:
+                    f.write(f'\tLevel crossing -> {levelCrossingsIS[j]["Id"]}\n')
+                    f.write(f'\t\tProtection -> {levelCrossingsIS[j]["Protection"]}\n')
+                    f.write(f'\t\tBarriers -> {levelCrossingsIS[j]["Barriers"]}\n')
+                    f.write(f'\t\tLights -> {levelCrossingsIS[j]["Lights"]}\n')
+                    f.write(f'\t\tAcoustic -> {levelCrossingsIS[j]["Acoustic"]}\n')
+                    
             for j in signalsIS:
                 if i == signalsIS[j]["Node"]:
                     f.write(f'\tSignals -> {j}\n')
@@ -311,7 +391,7 @@ def export_analysis(file,netElementsId,neighbours,borders, bufferStops,signalsIS
             
             for j in switchesIS:
                 if i == switchesIS[j]["Node"]:
-                    f.write(f'\tSwitches = {j}\n')
+                    f.write(f'\tSwitches -> {j}\n')
                     
                     left = identify_relations(switchesIS[j]["LeftBranch"])[:-1]
                     right = identify_relations(switchesIS[j]["RightBranch"])[:-1]
@@ -336,6 +416,6 @@ def analyzing_object(object):
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
     
-    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders, bufferStops,signalsIS,switchesIS,tracks,trainDetectionElements)
+    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
