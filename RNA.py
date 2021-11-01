@@ -31,7 +31,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<railML xmlns="https://www.railml.org/schemas/3.1" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:gml="http://www.opengis.net/gml/3.2/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.railml.org/schemas/3.1 https://www.railml.org/schemas/3.1/railml3.xsd" version="3.1">\n')
 
-        save_xml(RML,f,ignore = ignore)
+        save_xml(RML,f,ignore = ignore, test = False)
         
         f.close()
 
@@ -304,11 +304,19 @@ def detect_trainDetectionElements(infrastructure):
 def analyzing_infrastructure(infrastructure):
     
     # borders
-    borders = detect_borders(infrastructure)
-
+    try:
+        borders = detect_borders(infrastructure)
+    except:
+        print("Error with borders")
+        borders = {}
+        
     # bufferStops
-    bufferStops = detect_bufferStops(infrastructure)
-    
+    try:
+        bufferStops = detect_bufferStops(infrastructure)
+    except:
+        print("Error with bufferStops")
+        bufferStops = {}
+        
     # derailersIS
     derailersIS = detect_derailersIS(infrastructure)
     
@@ -423,5 +431,5 @@ def analyzing_object(object):
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
-    
-    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
+
+    #export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
