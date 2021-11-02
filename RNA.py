@@ -196,7 +196,7 @@ def detect_bufferStops(infrastructure):
     bufferStops = {}
     
     if infrastructure.BufferStops != None:
-        for i in [infrastructure.BufferStops[0].BufferStop]:
+        for i in infrastructure.BufferStops[0].BufferStop:
             if i.Id not in bufferStops.keys():
                 bufferStops[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
     
@@ -430,6 +430,6 @@ def analyzing_object(object):
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    #borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
 
     #export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
