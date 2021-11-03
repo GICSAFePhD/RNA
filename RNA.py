@@ -19,7 +19,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         
     if test:
         print("Creating railML object")
-    get_branches(RML,root,ignore = ignore,test = True )
+    get_branches(RML,root,ignore = ignore,test = False )
     
     if test:
         print("Analyzing railML object")
@@ -27,7 +27,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
     
     if test:
         print("Exporting .railML file")
-    with open(OUTPUT_FILE, "w") as f:        
+    with open(OUTPUT_FILE, "w" , encoding="utf-8") as f:        
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<railML xmlns="https://www.railml.org/schemas/3.1" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:gml="http://www.opengis.net/gml/3.2/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.railml.org/schemas/3.1 https://www.railml.org/schemas/3.1/railml3.xsd" version="3.1">\n')
 
