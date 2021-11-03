@@ -19,7 +19,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         
     if test:
         print("Creating railML object")
-    get_branches(RML,root,ignore = ignore,test = False )
+    get_branches(RML,root,ignore = ignore,test = True )
     
     if test:
         print("Analyzing railML object")
