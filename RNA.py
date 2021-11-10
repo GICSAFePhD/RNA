@@ -19,11 +19,14 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         
     if test:
         print("Creating railML object")
-    get_branches(RML,root,ignore = ignore,test = True )
+    get_branches(RML,root,ignore = ignore,test = False )
     
     if test:
         print("Analyzing railML object")
     analyzing_object(RML)
+    
+    # Create new signalling
+    
     
     if test:
         print("Exporting .railML file")
@@ -276,6 +279,7 @@ def detect_switchesIS(infrastructure):
                                             "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
                                             "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef}
     
+    print(switchesIS)
     return switchesIS
 
 def detect_tracks(infrastructure):
@@ -348,7 +352,6 @@ def analyzing_infrastructure(infrastructure):
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
     
-    #print(trainDetectionElements)
     with open(file, "w") as f:        
         f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+len(bufferStops)}\n')
         
@@ -419,6 +422,36 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                         f.write(f'\t\tContinueCourse -> left -> {left[0]}\n')
                         f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
         f.close()
+
+def detect_danger(file,switchesIS):
+    
+    with open(file, "w") as f: 
+        f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
+        
+        for i in switchesIS:
+            f.write(f'{i}\n')
+            danger_spot = switchesIS[i]
+            f.write(f'\t{danger_spot}\n')
+            start_node = danger_spot["Node"]
+            f.write(f'\tStart: {start_node}\n')
+            
+            continue_course = danger_spot["ContinueCourse"][0].upper() + danger_spot["ContinueCourse"][1:]
+            branch_course = danger_spot["BranchCourse"][0].upper() + danger_spot["BranchCourse"][1:]
+            
+            continue_nodes = danger_spot[continue_course+"Branch"]
+            continue_node = identify_relations(continue_nodes)[:-1]
+            continue_node.remove(start_node)
+                    
+            f.write(f'\tContinue: {continue_course} > {continue_nodes} > {continue_node[0]}\n')
+            
+            branch_nodes = danger_spot[branch_course+"Branch"]
+            branch_node = identify_relations(branch_nodes)[:-1]
+            branch_node.remove(start_node)
+            
+            f.write(f'\tBranch: {branch_course} > {branch_nodes} > {branch_node[0]}\n')
+        
+        
+        f.close()
 #%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -426,10 +459,16 @@ def analyzing_object(object):
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
     infrastructure = object.Infrastructure.FunctionalInfrastructure
 
-    print(" Analyzing graph --> Graph.RNA")
+    print(" Analyzing graph")
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
 
-    export_analysis("F:\PhD\RailML\\Graph.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
+    export_analysis("F:\PhD\RailML\\Infrastructure.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
+    
+    detect_danger("F:\PhD\RailML\\Dangers.RNA",switchesIS)
+    
+    
+    print(" Analyzing danger zones --> Danger.RNA")
+# %%
