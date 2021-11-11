@@ -182,6 +182,21 @@ def identify_relations(reference):
     name = reference.replace(end+'_','')
 
     return [begin,end,name]
+
+def detect_nodes(topology):
+    nodes = {}
+    
+    #return nodes 
+    
+    if topology.NetElements != None:
+    
+        for i in topology.NetElements.NetElement:
+            if i.Id not in nodes.keys():
+                nodes[i.Id] = {"Begin":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].Y[:-4])],
+                            "End":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].Y[:-4])],
+                            "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1}
+    
+    return nodes 
     
 def detect_borders(infrastructure):
     borders = {}
@@ -269,7 +284,7 @@ def detect_signalsIS(infrastructure):
     
     return signalsIS
 
-def detect_switchesIS(infrastructure):
+def detect_switchesIS(infrastructure,visualization):
     switchesIS = {}
 
     if infrastructure.SwitchesIS != None:
@@ -277,9 +292,21 @@ def detect_switchesIS(infrastructure):
             if i.Id not in switchesIS.keys():
                 switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
                                             "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
-                                            "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef}
+                                            "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef
+                                            }
     
-    print(switchesIS)
+    #print(switchesIS)
+    
+    if visualization.Visualization != None:
+        for i in  visualization.Visualization[0].SpotElementProjection:
+            if "Sw" in i.Name[0].Name:
+                switchesIS[i.Name[0].Name] |= {"Position":[int(i.Coordinate[0].X[:-4]),-int(i.Coordinate[0].Y[:-4])]}
+                #print(i.Name[0].Name,i.Coordinate[0].X,i.Coordinate[0].Y)
+            #if i.Name == "Sw01":
+            #    print (i.Name)
+    
+    
+    #print(switchesIS)
     return switchesIS
 
 def detect_tracks(infrastructure):
@@ -299,14 +326,22 @@ def detect_trainDetectionElements(infrastructure):
         for i in infrastructure.TrainDetectionElements[0].TrainDetectionElement:
             if i.Id not in trainDetectionElements.keys():
                 if i.SpotLocation[0].LinearCoordinate != None:
-                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Type":i.Type,"Side":i.SpotLocation[0].LinearCoordinate[0].LateralSide}
+                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Position":i.SpotLocation[0].IntrinsicCoord,"Type":i.Type,"Side":i.SpotLocation[0].LinearCoordinate[0].LateralSide}
                 else:
-                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Type":i.Type}
+                    trainDetectionElements[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"Position":i.SpotLocation[0].IntrinsicCoord,"Type":i.Type}
     
+    #print(trainDetectionElements)
     return trainDetectionElements
 
-def analyzing_infrastructure(infrastructure):
+def analyzing_infrastructure(topology,infrastructure,visualization):
     
+    # nodes
+    try:
+        nodes = detect_nodes(topology)
+    except:
+        print("Error with nodes")
+        nodes = {}
+        
     # borders
     try:
         borders = detect_borders(infrastructure)
@@ -340,7 +375,7 @@ def analyzing_infrastructure(infrastructure):
     signalsIS = detect_signalsIS(infrastructure)
 
     # switchesIS
-    switchesIS = detect_switchesIS(infrastructure)
+    switchesIS = detect_switchesIS(infrastructure,visualization)
 
     # tracks
     tracks = detect_tracks(infrastructure)
@@ -348,7 +383,7 @@ def analyzing_infrastructure(infrastructure):
     # trainDetectionElements
     trainDetectionElements = detect_trainDetectionElements(infrastructure)
 
-    return borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
+    return nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
     
@@ -423,17 +458,15 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                         f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
         f.close()
 
-def detect_danger(file,switchesIS):
+def detect_danger(file,nodes,switchesIS,trainDetectionElements):
     
     with open(file, "w") as f: 
-        f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
+        #f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
         
         for i in switchesIS:
-            f.write(f'{i}\n')
+            
             danger_spot = switchesIS[i]
-            f.write(f'\t{danger_spot}\n')
             start_node = danger_spot["Node"]
-            f.write(f'\tStart: {start_node}\n')
             
             continue_course = danger_spot["ContinueCourse"][0].upper() + danger_spot["ContinueCourse"][1:]
             branch_course = danger_spot["BranchCourse"][0].upper() + danger_spot["BranchCourse"][1:]
@@ -441,33 +474,84 @@ def detect_danger(file,switchesIS):
             continue_nodes = danger_spot[continue_course+"Branch"]
             continue_node = identify_relations(continue_nodes)[:-1]
             continue_node.remove(start_node)
-                    
-            f.write(f'\tContinue: {continue_course} > {continue_nodes} > {continue_node[0]}\n')
             
             branch_nodes = danger_spot[branch_course+"Branch"]
             branch_node = identify_relations(branch_nodes)[:-1]
             branch_node.remove(start_node)
             
-            f.write(f'\tBranch: {branch_course} > {branch_nodes} > {branch_node[0]}\n')
+            pos_sw          = [switchesIS[i]["Position"][0],switchesIS[i]["Position"][1]]
+            pos_start       = [[nodes[start_node]["Begin"][0],nodes[start_node]["Begin"][1]],[nodes[start_node]["End"][0],nodes[start_node]["End"][1]]]
+            pos_continue    = [[nodes[continue_node[0]]["Begin"][0],nodes[continue_node[0]]["Begin"][1]],[nodes[continue_node[0]]["End"][0],nodes[continue_node[0]]["End"][1]]]
+            pos_branch    = [[nodes[branch_node[0]]["Begin"][0],nodes[branch_node[0]]["Begin"][1]],[nodes[branch_node[0]]["End"][0],nodes[branch_node[0]]["End"][1]]]
+            
+            
+            continue_straight, branch_straight = calculate_angle(pos_sw,pos_start,pos_continue,pos_branch)
+            
+            
+            f.write(f'{i} @ ({pos_sw[0]},{pos_sw[1]})\n')
+            f.write(f'\tStart: {start_node} @ ({pos_start[0][0]},{pos_start[0][1]}) > ({pos_start[1][0]},{pos_start[1][1]})\n')
+            f.write(f'\tContinue > {continue_course} [{nodes[continue_node[0]]["Lines"]} {"--" if continue_straight else "/"} ] : {continue_node[0]} @ ({pos_continue[0][0]},{pos_continue[0][1]}) > ({pos_continue[1][0]},{pos_continue[1][1]})\n')
+            
+            f.write(f'\tBranch > {branch_course} [{nodes[branch_node[0]]["Lines"]} {"--" if branch_straight else "/"} ] : {branch_node[0]} @ ({pos_branch[0][0]},{pos_branch[0][1]}) > ({pos_branch[1][0]},{pos_branch[1][1]})\n')
         
         
         f.close()
+        
+def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch):        
+    
+    continue_straight = False
+    branch_straight = False
+    
+    res_set = set(map(tuple, pos_start)) ^ set(map(tuple, pos_continue))
+    res_list = list(map(list, res_set))
+    
+    x1 = res_list[0][0]
+    y1 = res_list[0][1]
+    x2 = pos_sw[0]
+    y2 = pos_sw[1]
+    x3 = res_list[1][0]
+    y3 = res_list[1][1]
+    
+    
+    #print(x1,y1,x2,y2,x3,y3)
+    
+    continue_straight = (y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2);
+    
+    #print(continue_straight,y1-y2,x1-x3,y1-y3,x1-x2)
+    
+    res_set = set(map(tuple, pos_start)) ^ set(map(tuple, pos_branch))
+    res_list = list(map(list, res_set))
+    
+    x1 = res_list[0][0]
+    y1 = res_list[0][1]
+
+    x3 = res_list[1][0]
+    y3 = res_list[1][1]
+    
+    # TODO ADD ALL THE POINTS, NOT ONLY BEGIN-END 
+    
+    branch_straight = (y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2);
+    
+    return continue_straight, branch_straight
+    
+        
 #%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements.NetElement
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
     infrastructure = object.Infrastructure.FunctionalInfrastructure
-
+    visualization = object.Infrastructure.InfrastructureVisualizations
+    
     print(" Analyzing graph")
     netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure)
+    nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(topology,infrastructure,visualization)
 
     export_analysis("F:\PhD\RailML\\Infrastructure.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
-    detect_danger("F:\PhD\RailML\\Dangers.RNA",switchesIS)
+    detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,switchesIS,trainDetectionElements)
     
     
     print(" Analyzing danger zones --> Danger.RNA")
