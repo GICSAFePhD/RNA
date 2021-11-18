@@ -474,63 +474,64 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
             continue_nodes = danger_spot[continue_course+"Branch"]
             continue_node = identify_relations(continue_nodes)[:-1]
             continue_node.remove(start_node)
+            continue_node = continue_node[0]
             
             branch_nodes = danger_spot[branch_course+"Branch"]
             branch_node = identify_relations(branch_nodes)[:-1]
             branch_node.remove(start_node)
+            branch_node = branch_node[0]
             
-            pos_sw          = [switchesIS[i]["Position"][0],switchesIS[i]["Position"][1]]
-            pos_start       = [[nodes[start_node]["Begin"][0],nodes[start_node]["Begin"][1]],[nodes[start_node]["End"][0],nodes[start_node]["End"][1]]]
-            pos_continue    = [[nodes[continue_node[0]]["Begin"][0],nodes[continue_node[0]]["Begin"][1]],[nodes[continue_node[0]]["End"][0],nodes[continue_node[0]]["End"][1]]]
-            pos_branch    = [[nodes[branch_node[0]]["Begin"][0],nodes[branch_node[0]]["Begin"][1]],[nodes[branch_node[0]]["End"][0],nodes[branch_node[0]]["End"][1]]]
+            #print(start_node,continue_node,branch_node)
             
+            pos_sw          = switchesIS[i]["Position"]
+            pos_start       = nodes[start_node]["Begin"] if switchesIS[i]["Position"] == nodes[start_node]["End"] else nodes[start_node]["End"]
+            pos_continue    = nodes[continue_node]["Begin"] if switchesIS[i]["Position"] == nodes[continue_node]["End"] else nodes[continue_node]["End"]
+            pos_branch      = nodes[branch_node]["Begin"] if switchesIS[i]["Position"] == nodes[branch_node]["End"] else nodes[branch_node]["End"]
             
-            continue_straight, branch_straight = calculate_angle(pos_sw,pos_start,pos_continue,pos_branch)
+            n_continue = nodes[continue_node]["Lines"]
+            n_branch = nodes[branch_node]["Lines"] 
             
+            #print(pos_start,pos_continue,pos_branch)
+            
+            continue_straight, branch_straight = calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch)
             
             f.write(f'{i} @ ({pos_sw[0]},{pos_sw[1]})\n')
-            f.write(f'\tStart: {start_node} @ ({pos_start[0][0]},{pos_start[0][1]}) > ({pos_start[1][0]},{pos_start[1][1]})\n')
-            f.write(f'\tContinue > {continue_course} [{nodes[continue_node[0]]["Lines"]} {"--" if continue_straight else "/"} ] : {continue_node[0]} @ ({pos_continue[0][0]},{pos_continue[0][1]}) > ({pos_continue[1][0]},{pos_continue[1][1]})\n')
+            f.write(f'\tStart: {start_node} @ ({pos_start[0]},{pos_start[1]}) > ({pos_sw[0]},{pos_sw[1]})\n')
+            f.write(f'\tContinue > {continue_course} [{n_continue} {"--" if continue_straight else "/"} ] : {continue_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_continue[0]},{pos_continue[1]})\n')
             
-            f.write(f'\tBranch > {branch_course} [{nodes[branch_node[0]]["Lines"]} {"--" if branch_straight else "/"} ] : {branch_node[0]} @ ({pos_branch[0][0]},{pos_branch[0][1]}) > ({pos_branch[1][0]},{pos_branch[1][1]})\n')
+            f.write(f'\tBranch > {branch_course} [{n_branch} {"--" if branch_straight else "/"} ] : {branch_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_branch[0]},{pos_branch[1]})\n')
         
         
         f.close()
         
-def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch):        
+def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch):        
     
     continue_straight = False
     branch_straight = False
     
-    res_set = set(map(tuple, pos_start)) ^ set(map(tuple, pos_continue))
-    res_list = list(map(list, res_set))
-    
-    x1 = res_list[0][0]
-    y1 = res_list[0][1]
+    #print(pos_sw,pos_start,pos_continue,pos_branch)
+
+    x1 = pos_start[0]
+    y1 = pos_start[1]
     x2 = pos_sw[0]
     y2 = pos_sw[1]
-    x3 = res_list[1][0]
-    y3 = res_list[1][1]
+    x3 = pos_continue[0]
+    y3 = pos_continue[1]
     
+    #print(f'[{x1},{y1}] > [{x2},{y2}] > [{x3},{y3}]')
+    
+    continue_straight = ((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)) & (n_continue == 1)
+    
+    x3 = pos_branch[0]
+    y3 = pos_branch[1]
     
     #print(x1,y1,x2,y2,x3,y3)
-    
-    continue_straight = (y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2);
-    
-    #print(continue_straight,y1-y2,x1-x3,y1-y3,x1-x2)
-    
-    res_set = set(map(tuple, pos_start)) ^ set(map(tuple, pos_branch))
-    res_list = list(map(list, res_set))
-    
-    x1 = res_list[0][0]
-    y1 = res_list[0][1]
-
-    x3 = res_list[1][0]
-    y3 = res_list[1][1]
-    
     # TODO ADD ALL THE POINTS, NOT ONLY BEGIN-END 
     
-    branch_straight = (y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2);
+    # Because it is a branch!
+    branch_straight = False #((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)) & (n_branch == 1)
+    
+    #print(pos_continue["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)),pos_branch["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)))
     
     return continue_straight, branch_straight
     
