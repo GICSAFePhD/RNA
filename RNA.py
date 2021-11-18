@@ -463,6 +463,7 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
     with open(file, "w") as f: 
         #f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
         
+        semaphores = {}
         for i in switchesIS:
             
             danger_spot = switchesIS[i]
@@ -488,6 +489,7 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
             pos_continue    = nodes[continue_node]["Begin"] if switchesIS[i]["Position"] == nodes[continue_node]["End"] else nodes[continue_node]["End"]
             pos_branch      = nodes[branch_node]["Begin"] if switchesIS[i]["Position"] == nodes[branch_node]["End"] else nodes[branch_node]["End"]
             
+            n_start = nodes[start_node]["Lines"]
             n_continue = nodes[continue_node]["Lines"]
             n_branch = nodes[branch_node]["Lines"] 
             
@@ -495,14 +497,61 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
             
             continue_straight, branch_straight = calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch)
             
+            semaphore_source = {'Node':i,'Start':[start_node,pos_start,n_start],'Continue':[continue_course,pos_continue,n_continue,continue_straight],'Branch':[branch_course,pos_branch,n_branch,branch_straight]}
+            
+            create_semaphore(semaphores,semaphore_source) 
+            
             f.write(f'{i} @ ({pos_sw[0]},{pos_sw[1]})\n')
             f.write(f'\tStart: {start_node} @ ({pos_start[0]},{pos_start[1]}) > ({pos_sw[0]},{pos_sw[1]})\n')
             f.write(f'\tContinue > {continue_course} [{n_continue} {"--" if continue_straight else "/"} ] : {continue_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_continue[0]},{pos_continue[1]})\n')
             
             f.write(f'\tBranch > {branch_course} [{n_branch} {"--" if branch_straight else "/"} ] : {branch_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_branch[0]},{pos_branch[1]})\n')
         
-        
         f.close()
+
+    #print(semaphores)
+    
+def create_semaphore(semaphores,semaphore_source):
+    
+    X = "nose"
+    n = len(semaphores)+1
+    
+    #Start to Continue
+    n_continue = semaphore_source["Continue"][3]
+    start_x = semaphore_source["Start"][1][0]
+    continue_x = semaphore_source["Continue"][1][0]
+    
+    type = "Straight" if n_continue else "Maneuver"
+    net = semaphore_source["Start"][0]
+    direction, position = ("Normal","Left") if start_x < continue_x else ("Reverse","Right")
+    coordinate = 0.33 # or 0.66 ...
+    
+    semaphores[n] = {'Id':'sig'+str(n),'Net':net,'Direction':direction,'Position':position,'Coordinate':coordinate}
+    
+    print(f'  Creating a {type} semaphore[{n}] @{net} in {coordinate}|{semaphore_source}')
+    
+    #Start to Branch
+    n_continue = semaphore_source["Branch"][3]
+    start_x = semaphore_source["Start"][1][0]
+    branch_x = semaphore_source["Branch"][1][0]
+    
+    type = "Straight" if n_continue else "Maneuver"
+    net = semaphore_source["Start"][0]
+    direction, position = ("Normal","Left") if start_x < branch_x else ("Reverse","Right")
+    coordinate = 0.33 # or 0.66 ...
+    
+    semaphores[n+1] = {'Id':'sig'+str(n+1),'Net':net,'Direction':direction,'Position':position,'Coordinate':coordinate}
+    
+    print(f'  Creating a {type} semaphore[{n+1}] @{net} in {coordinate}|{semaphore_source}')
+    
+    # Continue To Start
+    semaphores[n+2] = {'Continue':0,'Start':0}
+    #print(f'  Creating a {X} semaphore[{n+2}] @{X} in {semaphore_source}')
+    
+    #Continue To Branch
+    semaphores[n+3] = {'Branch':0,'Start':0}
+    #print(f'  Creating a {X} semaphore[{n+3}] @{X} in {semaphore_source}')
+    
         
 def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch):        
     
