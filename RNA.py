@@ -550,12 +550,43 @@ def analyze_switches(nodes,switchesIS,railJoint):
         branch_node = branch_node[0]
         branch_position = nodes[branch_node]["Begin"] if sw_position == nodes[branch_node]["End"] else nodes[branch_node]["End"]
         
-        # TODO CONTINUE HERE
+        # Find the start rail joint
+        try:
+            start_rail_joint_data = railJoint[start_node]
+            rail_joint_index = find_closest_coordinate(start_rail_joint_data["Position"],sw_position)
+            start_rail_joint_position = start_rail_joint_data["Position"][rail_joint_index]
+            start_rail_joint = start_rail_joint_data["Joint"][rail_joint_index]
+            start_signal_position = start_rail_joint_position # TODO IN THE SAME LINE SW-JOINT
+        except:
+            print("No rail joint found")
+            start_signal_position = start_position  # TODO SOME METERS BEFORE THE SWITHC
         
-        #print(sw_info)
+        print(start_node,sw_position,start_signal_position)
         
+        
+    #print(nodes)
     
     return switches_data
+
+# Find the closest joint to the switch position
+def find_closest_coordinate(joint_positions,sw_position):
+    index = -1
+    distance = -1
+    
+    for joint in joint_positions:
+        new_distance_sq = (joint[0]-sw_position[0])**2 + (joint[1]-sw_position[1])**2
+        if distance == -1:
+            distance = new_distance_sq
+            index = joint_positions.index(joint)
+        if new_distance_sq < distance:
+            distance = new_distance_sq
+            index = joint_positions.index(joint)
+    
+    return index
+    
+    
+    
+    return index
 
 def create_railJoint(trainDetectionElements):
     railJoint = {}
