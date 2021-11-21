@@ -37,7 +37,6 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         save_xml(RML,f,ignore = ignore, test = False)
         
         f.close()
-
 #%%
 def add_sections(graph,node,zones):
     zones_number = len(zones)
@@ -92,15 +91,14 @@ def analyze_connectedness(neighbours):
 def analyzing_graph(netElements,netRelations):
         
     netElementsId = get_nodes(netElements)
-    netRelationsId = get_relations(netRelations)
+    netPaths = get_relations(netRelations)
     neighbours,switches = get_neighbours_and_switches(netElements) 
     limits = get_limits(switches)
     
     x = '' if (analyze_connectedness(neighbours)) else ('not ')
-
     print(f' The network is {x}connected')
 
-    return netElementsId,neighbours,switches,limits
+    return netElementsId,neighbours,switches,limits,netPaths
 
 #%%%   
 def get_nodes(netElements):
@@ -113,12 +111,33 @@ def get_nodes(netElements):
     return netElementsId  
 
 def get_relations(netRelations):
-    netRelationsId = []
+    netPaths = {}
     
     for netRelation in netRelations:
-        netRelationsId.append(netRelation.Id)
+        [begin_net, end_net, name] = identify_relations(netRelation.Id)
         
-    return netRelationsId  
+        #print(begin_net,end_net, netRelation.Navigability)
+        if netRelation.Navigability == "Both":
+            if begin_net not in netPaths:
+                netPaths[begin_net] = {"Next":[]}
+            elif "Prev" in netPaths[begin_net] and "Next" not in netPaths[begin_net]:
+                netPaths[begin_net] |= {"Next":[]}
+            
+            if end_net not in netPaths:
+                netPaths[end_net] = {"Prev":[]}
+            elif "Next" in netPaths[end_net]  and "Prev" not in netPaths[end_net]:
+                netPaths[end_net] |= {"Prev":[]}
+        
+        #print(netPaths)
+        
+            if end_net not in netPaths[begin_net]["Next"]:
+                netPaths[begin_net]["Next"].append(end_net)
+            if begin_net not in netPaths[end_net]["Prev"]:
+                netPaths[end_net]["Prev"].append(begin_net)
+        #print(netPaths)   
+    
+    #print("Paths: ",netPaths)
+    return netPaths  
 
 def get_neighbours_and_switches(netElements):
     neighbours = {}
@@ -456,7 +475,7 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                         f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
         f.close()
 
-def detect_danger(file,nodes,switchesIS,trainDetectionElements):
+def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements):
     
     with open(file, "w") as f: 
         #f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
@@ -466,7 +485,7 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
         railJoint = create_railJoint(trainDetectionElements)
         #print(railJoint)
         
-        source = analyze_switches(nodes,switchesIS,railJoint)
+        source = analyze_switches(nodes,netPaths,switchesIS,railJoint)
         
         print(source)
         
@@ -519,10 +538,11 @@ def detect_danger(file,nodes,switchesIS,trainDetectionElements):
     #print(semaphores)
     return semaphores
 
-def analyze_switches(nodes,switchesIS,railJoint):
+def analyze_switches(nodes,netPaths,switchesIS,railJoint):
     switches_data = {}
     
-    print(railJoint)
+    #print(railJoint)
+    #print(nodes)
     for switch in switchesIS:
         # Find the switch info
         sw_info = switchesIS[switch]
@@ -551,17 +571,29 @@ def analyze_switches(nodes,switchesIS,railJoint):
         branch_position = nodes[branch_node]["Begin"] if sw_position == nodes[branch_node]["End"] else nodes[branch_node]["End"]
         
         # Find the start rail joint
-        try:
-            start_rail_joint_data = railJoint[start_node]
-            rail_joint_index = find_closest_coordinate(start_rail_joint_data["Position"],sw_position)
-            start_rail_joint_position = start_rail_joint_data["Position"][rail_joint_index]
-            start_rail_joint = start_rail_joint_data["Joint"][rail_joint_index]
-            start_signal_position = start_rail_joint_position # TODO IN THE SAME LINE SW-JOINT
-        except:
-            print("No rail joint found")
-            start_signal_position = start_position  # TODO SOME METERS BEFORE THE SWITHC
+        rail_joint_found = False
+        start_candidate_node = start_node
         
-        print(start_node,sw_position,start_signal_position)
+        while (rail_joint_found == False):
+            if start_candidate_node in railJoint:
+                start_rail_joint_data = railJoint[start_candidate_node]
+                rail_joint_found = True
+            else:
+                start_candidate_node = "ne1"
+                rail_joint_found = False
+                
+        
+        
+        
+        
+        start_rail_joint_data = railJoint[start_node]
+        rail_joint_index = find_closest_coordinate(start_rail_joint_data["Position"],sw_position)
+        start_rail_joint_position = start_rail_joint_data["Position"][rail_joint_index]
+        start_rail_joint = start_rail_joint_data["Joint"][rail_joint_index]
+        start_signal_position = start_rail_joint_position # TODO IN THE SAME LINE SW-JOINT
+
+        
+        print(switch,start_node,sw_position,start_signal_position)
         
         
     #print(nodes)
@@ -582,10 +614,7 @@ def find_closest_coordinate(joint_positions,sw_position):
             distance = new_distance_sq
             index = joint_positions.index(joint)
     
-    return index
-    
-    
-    
+    print(index)
     return index
 
 def create_railJoint(trainDetectionElements):
@@ -698,7 +727,19 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     #print(pos_continue["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)),pos_branch["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)))
     
     return continue_straight, branch_straight
+
+def analyze_conections(netElementsId,switchesIS):
+    connections = {}
+    print(switchesIS)
+        
+    for net in netElementsId:
+        connections[net] = {}
+        
     
+    
+    
+    
+    return connections
 #%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -707,15 +748,18 @@ def analyzing_object(object):
     infrastructure = object.Infrastructure.FunctionalInfrastructure
     visualization = object.Infrastructure.InfrastructureVisualizations
     
+    
     print(" Analyzing graph")
-    netElementsId,neighbours,switches,limits = analyzing_graph(netElements,netRelations)
+    netElementsId,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(topology,infrastructure,visualization)
-
+    
     export_analysis("F:\PhD\RailML\\Infrastructure.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
-    semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,switchesIS,trainDetectionElements)
+    print(" Detecting Danger --> Signalling.RNA")
+    
+    semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements)
     
     export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores)
     
