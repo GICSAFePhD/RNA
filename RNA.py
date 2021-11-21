@@ -540,9 +540,10 @@ def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements):
 
 def analyze_switches(nodes,netPaths,switchesIS,railJoint):
     switches_data = {}
-    
+    node_sw = {}
     #print(railJoint)
     #print(nodes)
+    print(switchesIS)
     for switch in switchesIS:
         # Find the switch info
         sw_info = switchesIS[switch]
@@ -551,6 +552,8 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint):
         # Find the start node
         start_node = sw_info["Node"]
         start_position = nodes[start_node]["Begin"] if sw_position == nodes[start_node]["End"] else nodes[start_node]["End"]
+        # Attach switch to node
+        node_sw[sw_info["Node"]] = switch
         # Find the continue course
         continue_course = sw_info["ContinueCourse"].capitalize()
         # Find the branch course
@@ -574,24 +577,34 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint):
         rail_joint_found = False
         start_candidate_node = start_node
         
-        while (rail_joint_found == False):
+        #print(railJoint)
+        while (rail_joint_found == False):  
             if start_candidate_node in railJoint:
                 start_rail_joint_data = railJoint[start_candidate_node]
                 rail_joint_found = True
             else:
-                start_candidate_node = "ne1"
-                rail_joint_found = False
-                
+                if len(netPaths[start_candidate_node]["Prev"]) == 1:
+                    start_candidate_node = netPaths[start_candidate_node]["Prev"][0]
+                else:
+                    break
         
-        
-        
-        
-        start_rail_joint_data = railJoint[start_node]
-        rail_joint_index = find_closest_coordinate(start_rail_joint_data["Position"],sw_position)
-        start_rail_joint_position = start_rail_joint_data["Position"][rail_joint_index]
-        start_rail_joint = start_rail_joint_data["Joint"][rail_joint_index]
-        start_signal_position = start_rail_joint_position # TODO IN THE SAME LINE SW-JOINT
-
+        if rail_joint_found == True:
+            start_rail_joint_data = railJoint[start_candidate_node]
+            rail_joint_index = find_closest_coordinate(start_rail_joint_data["Position"],sw_position)
+            start_rail_joint_position = start_rail_joint_data["Position"][rail_joint_index]
+            start_rail_joint = start_rail_joint_data["Joint"][rail_joint_index]
+            
+            sw_candidate_position = node_sw[start_candidate_node]
+            start_candidate_position = nodes[start_candidate_node]["Begin"] if  sw_candidate_position == nodes[start_candidate_node]["End"] else nodes[start_candidate_node]["End"]
+            # Calculate the signal position in the same line as the switch and node, before the joint
+            start_signal_position = calculate_position(start_candidate_position,sw_candidate_position,start_rail_joint_position) # TODO IN THE SAME LINE SW-JOINT
+        else:
+            if nodes[start_candidate_node]["Lines"] > 1:
+                # Calculate the signal position before the curve before the switch node
+                start_signal_position = [0,0]
+            else:
+                # Calculate the signal position in the same line as the switch and node, at 30% of the switch position
+                start_signal_position = [0,0] # TODO FIND A POINT IN THE NETPATH
         
         print(switch,start_node,sw_position,start_signal_position)
         
@@ -599,6 +612,18 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint):
     #print(nodes)
     
     return switches_data
+
+# Calculate the signal position in the same line as the switch and node, before the joint
+def calculate_position(start_candidate_position,sw_candidate_position,start_rail_joint_position):
+    signal_position = [1,1]
+    
+    # calculate coordinate between two points
+    
+    
+    
+    
+    
+    return signal_position
 
 # Find the closest joint to the switch position
 def find_closest_coordinate(joint_positions,sw_position):
@@ -614,7 +639,7 @@ def find_closest_coordinate(joint_positions,sw_position):
             distance = new_distance_sq
             index = joint_positions.index(joint)
     
-    print(index)
+    #print(index)
     return index
 
 def create_railJoint(trainDetectionElements):
@@ -727,19 +752,6 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     #print(pos_continue["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)),pos_branch["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)))
     
     return continue_straight, branch_straight
-
-def analyze_conections(netElementsId,switchesIS):
-    connections = {}
-    print(switchesIS)
-        
-    for net in netElementsId:
-        connections[net] = {}
-        
-    
-    
-    
-    
-    return connections
 #%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
