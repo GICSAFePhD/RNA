@@ -210,9 +210,10 @@ def detect_nodes(topology):
     
         for i in topology.NetElements.NetElement:
             if i.Id not in nodes.keys():
+                #print([[i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4],i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4]] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))])
                 nodes[i.Id] = {"Begin":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].Y[:-4])],
                             "End":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].Y[:-4])],
-                            "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1}
+                            "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1,"All":[[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4])] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))]}
     
     return nodes 
     
@@ -477,6 +478,8 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
 
 def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements):
     
+    #print(nodes)
+    
     with open(file, "w") as f: 
         #f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
         
@@ -487,7 +490,7 @@ def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements):
         
         source = analyze_switches(nodes,netPaths,switchesIS,railJoint)
         
-        print(source)
+        #print(source)
         
         
         for i in switchesIS:
@@ -605,22 +608,38 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint):
             # Calculate the signal position in the same line as the switch and node, before the joint
             start_signal_position = calculate_position(start_candidate_position,sw_candidate_position,start_rail_joint_position)    # TODO LIMIT THE POSITION IF THE LINE ENDS IN A BUFFER
         else:
+            #print(start_candidate_node,nodes[start_candidate_node]["Lines"])
             if nodes[start_candidate_node]["Lines"] > 1:
                 # Calculate the signal position before the curve before the switch node
                 start_candidate_position = start_position
                 sw_candidate_position = sw_position
                 start_rail_joint_position = None
-                start_signal_position = [0,0]
+                fake_rail_joint_index = nodes[start_candidate_node]["All"].index(sw_candidate_position)
+                
+                if fake_rail_joint_index == 0:
+                    sw_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 1]
+                    start_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 2]
+                elif fake_rail_joint_index == len(nodes[start_candidate_node]["All"])-1:
+                    sw_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index - 1]
+                    start_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index - 2]
+                #print(nodes[start_candidate_node]["All"],sw_candidate_position,start_candidate_position)
             else:
                 # Calculate the signal position in the same line as the switch and node, at 30% of the switch position
                 start_candidate_position = start_position
                 sw_candidate_position = sw_position
                 start_rail_joint_position = None
-                start_signal_position = [1,1] # TODO FIND A POINT IN THE NETPATH
+                
+            #print(sw_candidate_position,start_candidate_position)
+            if start_candidate_position[0] > sw_candidate_position[0]:
+                start_fake_rail_joint_position = [sw_candidate_position[0] + (start_candidate_position[0] - sw_candidate_position[0])*0.3 , sw_candidate_position[1] + (start_candidate_position[1] - sw_candidate_position[1])*0.3]
+            else:
+                start_fake_rail_joint_position = [start_candidate_position[0] + (sw_candidate_position[0] - start_candidate_position[0])*0.3 , start_candidate_position[1] + (sw_candidate_position[1] - start_candidate_position[1])*0.3]
+    
+            #print(start_candidate_position,sw_candidate_position,start_fake_rail_joint_position)
+            start_signal_position = start_fake_rail_joint_position
         
         print(switch,start_node,start_candidate_position,sw_candidate_position,start_rail_joint_position,start_signal_position)
-        
-        
+    
     #print(nodes)
     
     return switches_data
@@ -635,8 +654,10 @@ def calculate_position(start_candidate_position,sw_candidate_position,start_rail
     
     d = 0.075
     
-    signal_position_a = [start_rail_joint_position[0]*(1+d),start_rail_joint_position[1]*(1+d)*m+c]
-    signal_position_b = [start_rail_joint_position[0]*(1-d),start_rail_joint_position[1]*(1-d)*m+c]
+    signal_position_a = [start_rail_joint_position[0]*(1+d),start_rail_joint_position[0]*(1+d)*m+c]
+    signal_position_b = [start_rail_joint_position[0]*(1-d),start_rail_joint_position[0]*(1-d)*m+c]
+    
+    #print(m,c,signal_position_a,signal_position_b)
     
     distance_a = (signal_position_a[0]-sw_candidate_position[0])**2 + (signal_position_a[1]-sw_candidate_position[1])**2
     distance_b = (signal_position_b[0]-sw_candidate_position[0])**2 + (signal_position_b[1]-sw_candidate_position[1])**2
