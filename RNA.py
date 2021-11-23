@@ -359,7 +359,10 @@ def analyzing_infrastructure(topology,infrastructure,visualization):
     except:
         print("Error with nodes")
         nodes = {}
-        
+
+    #
+    
+    
     # borders
     try:
         borders = detect_borders(infrastructure)
@@ -804,6 +807,12 @@ def analyzing_object(object):
     infrastructure = object.Infrastructure.FunctionalInfrastructure
     visualization = object.Infrastructure.InfrastructureVisualizations
     
+    # TODO
+    #   - Use the node position to fix the prev/next node based on relation
+    #   - Don't re-read the node information
+    #   - Refactor the danger detector to get the semaphore positions for any direction
+    #   - Create the semaphore data
+    #   - Create the new semaphore object
     
     print(" Analyzing graph")
     netElementsId,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)   # TODO IF THE NET WAS NOT CREATING IN ORDER THERE IS A FAIL
