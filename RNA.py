@@ -90,65 +90,71 @@ def analyze_connectedness(neighbours):
 #%%%
 def analyzing_graph(netElements,netRelations):
     
-    netElementsId = get_nodes(netElements)
-    netPaths = get_relations(netRelations)
-    neighbours,switches = get_neighbours_and_switches(netElements) 
+    nodes = get_nodes(netElements)
+    netPaths = get_relations(nodes,netRelations)
+    neighbours,switches = get_neighbours_and_switches(nodes,netElements) 
     limits = get_limits(switches)
     
     x = '' if (analyze_connectedness(neighbours)) else ('not ')
     print(f' The network is {x}connected')
 
-    return netElementsId,neighbours,switches,limits,netPaths
-
+    return nodes,neighbours,switches,limits,netPaths
 #%%%   
 def get_nodes(netElements):
-    netElementsId = []
-    
-    for netElement in netElements:
-        if (netElement.Id[2].isdigit()):        # Only MICRO
-            netElementsId.append(netElement.Id)
-        
-    return netElementsId  
+    nodes = {}
 
-def get_relations(netRelations):
+    if netElements != None:
+        
+        for i in netElements.NetElement:
+            if i.Id not in nodes.keys():
+                #print([[i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4],i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4]] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))])
+                nodes[i.Id] = {"Begin":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].Y[:-4])],
+                            "End":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].Y[:-4])],
+                            "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1,"All":[[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4])] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))]}
+    return nodes  
+
+def get_relations(nodes,netRelations):
     netPaths = {}
     
     for netRelation in netRelations:
         [begin_net, end_net, name] = identify_relations(netRelation.Id)
         
-        #print(begin_net,end_net, netRelation.Navigability)
         if netRelation.Navigability == "Both":
             if begin_net not in netPaths:
-                netPaths[begin_net] = {"Next":[]}
-            elif "Prev" in netPaths[begin_net] and "Next" not in netPaths[begin_net]:
-                netPaths[begin_net] |= {"Next":[]}
-            
+                netPaths[begin_net] = {"Prev":[],"Next":[]}
             if end_net not in netPaths:
-                netPaths[end_net] = {"Prev":[]}
-            elif "Next" in netPaths[end_net]  and "Prev" not in netPaths[end_net]:
-                netPaths[end_net] |= {"Prev":[]}
+                netPaths[end_net] = {"Prev":[],"Next":[]}
         
-        #print(netPaths)
-        
-            if end_net not in netPaths[begin_net]["Next"]:
-                netPaths[begin_net]["Next"].append(end_net)
-            if begin_net not in netPaths[end_net]["Prev"]:
-                netPaths[end_net]["Prev"].append(begin_net)
-        #print(netPaths)   
+            if nodes[begin_net]["Begin"][0] < nodes[end_net]["Begin"][0]:
+                if end_net not in netPaths[begin_net]["Next"]:
+                    netPaths[begin_net]["Next"].append(end_net)
+                if begin_net not in netPaths[end_net]["Prev"]:
+                    netPaths[end_net]["Prev"].append(begin_net)
+            else:
+                if end_net not in netPaths[begin_net]["Prev"]:
+                    netPaths[begin_net]["Prev"].append(end_net)
+                if begin_net not in netPaths[end_net]["Next"]:
+                    netPaths[end_net]["Next"].append(begin_net)
+    
+    for i in netPaths:
+        if netPaths[i]["Prev"] == []:
+            del netPaths[i]["Prev"]
+        if netPaths[i]["Next"] == []:
+            del netPaths[i]["Next"]
     
     #print("Paths: ",netPaths)
     return netPaths  
 
-def get_neighbours_and_switches(netElements):
+def get_neighbours_and_switches(nodes,netElements):
     neighbours = {}
     switches = {}
     
-    netElementsId = get_nodes(netElements)
+    #netElementsId = get_nodes(netElements)
     
-    for i in netElementsId:
+    for i in nodes:
         neighbours[i] = []
     
-    for netElement in netElements:
+    for netElement in netElements.NetElement:
         #print(netElement.AssociatedPositioningSystem)
         if netElement.Relation != None:
             for i in netElement.Relation:
@@ -181,15 +187,13 @@ def get_limits(switches):
     
     for j in switches:
         for i in switches[j]:
-        
             if i in limits:
                 limits.remove(i)
             else:
-                
                 limits.append(i)
     
     return limits
-    
+
 def identify_relations(reference):
     begin = end = name = ""
 
@@ -351,18 +355,7 @@ def detect_trainDetectionElements(infrastructure,visualization):
     #print(trainDetectionElements)
     return trainDetectionElements
 
-def analyzing_infrastructure(topology,infrastructure,visualization):
-    
-    # nodes
-    try:
-        nodes = detect_nodes(topology)
-    except:
-        print("Error with nodes")
-        nodes = {}
-
-    #
-    
-    
+def analyzing_infrastructure(nodes,infrastructure,visualization):
     # borders
     try:
         borders = detect_borders(infrastructure)
@@ -802,25 +795,25 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
 #%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
-    netElements = topology.NetElements.NetElement
+    netElements = topology.NetElements
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
     infrastructure = object.Infrastructure.FunctionalInfrastructure
     visualization = object.Infrastructure.InfrastructureVisualizations
     
     # TODO
-    #   - Use the node position to fix the prev/next node based on relation
-    #   - Don't re-read the node information
+    #   - Use the node position to fix the prev/next node based on relation                 DONE
+    #   - Don't re-read the node information                                                DONE
     #   - Refactor the danger detector to get the semaphore positions for any direction
     #   - Create the semaphore data
     #   - Create the new semaphore object
     
     print(" Analyzing graph")
-    netElementsId,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)   # TODO IF THE NET WAS NOT CREATING IN ORDER THERE IS A FAIL
+    nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)   # TODO IF THE NET WAS NOT CREATING IN ORDER THERE IS A FAIL
         
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(topology,infrastructure,visualization)
+    nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(nodes,infrastructure,visualization)
     
-    export_analysis("F:\PhD\RailML\\Infrastructure.RNA",netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
+    export_analysis("F:\PhD\RailML\\Infrastructure.RNA",nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
     print(" Detecting Danger --> Signalling.RNA")
     
