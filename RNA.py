@@ -537,17 +537,12 @@ def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements,bufferSt
 
 def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
     switches_data = {}
-    node_sw = {}
     
-    print("Net:",netPaths)
-    #print(switchesIS)
-    #print(railJoint)
+    #print("Net:",netPaths)
     
     for switch in switchesIS:
         # Find the switch info
         sw_info = switchesIS[switch]
-        # Attach switch to node
-        node_sw[sw_info["Node"]] = switch
         
         switches_data[switch] = {}
                 
@@ -573,10 +568,9 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
             # Branch course is left
             switches_data[switch] |= {'Branch':end_left}
     
-    #print("node_sw:",node_sw)
-    print("switches_data:",switches_data)
+    #print("switches_data:",switches_data)
     #print("SW:",switchesIS)
-    print("J:",railJoint)
+    #print("J:",railJoint)
     
     for switch in switchesIS:
         # Find the switch info
@@ -607,11 +601,11 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
         branch_node = branch_node[0]
         branch_position = nodes[branch_node]["Begin"] if sw_position == nodes[branch_node]["End"] else nodes[branch_node]["End"]
         
-        #switches_data = calculate_start_position(start_node,start_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
+        switches_data = calculate_start_position(start_node,start_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
         #print(switches_data)
         switches_data = calculate_start_position(continue_node,continue_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
         #print(switches_data)
-        #switches_data = calculate_start_position(branch_node,branch_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
+        switches_data = calculate_start_position(branch_node,branch_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
         #print(switches_data)
         
     return switches_data
@@ -626,9 +620,10 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
     #print(mode)
     
     # Find the start candidate node
-    start_candidate_node,rail_joint_found,start_rail_joint_data = get_candidate_node(mode,railJoint,candidate_node,candidate_position,sw_position,netPaths,switches_data,test = True)
-    print(f'{candidate_node}--{start_candidate_node}|{rail_joint_found}')
+    start_candidate_node,rail_joint_found,start_rail_joint_data = get_candidate_node(mode,railJoint,candidate_node,candidate_position,sw_position,netPaths,switches_data,test = False)
+    #print(f'{candidate_node}--{start_candidate_node}|{rail_joint_found}')
     
+    #return switches_data
     # Find the semaphore position
     if rail_joint_found == True:
         # Find the rail joint data for the candidate node
@@ -648,15 +643,33 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
         # Calculate the signal position in the same line as the switch and node, before the joint
         start_signal_position = calculate_position(start_candidate_position,sw_candidate_position,start_rail_joint_position)    # TODO LIMIT THE POSITION IF THE LINE ENDS IN A BUFFER
     else:
-        print("No Rail Joint Found")
+        #print("No Rail Joint Found")
         #print(start_candidate_node,nodes[start_candidate_node]["Lines"])
         if nodes[start_candidate_node]["Lines"] > 1:
             # Calculate the signal position before the curve before the switch node
             start_candidate_position = candidate_position
-            sw_candidate_position = sw_position
+            
+            aux_mode = mode if mode != "Branch" else "Continue"
+
+            if candidate_node == start_candidate_node:
+                switch_candidate = switch
+            else:
+                for i in switches_data:
+                    #print("T:",switches_data[i],mode,aux_mode,start_candidate_node,candidate_node)
+                    if switches_data[i][aux_mode] == start_candidate_node:
+                        switch_candidate = i
+                    
+            sw_candidate_position = switchesIS[switch_candidate]["Position"]   
+                
             start_rail_joint_position = None
+            #print(start_candidate_node,nodes[start_candidate_node],start_candidate_position,sw_candidate_position)
+            
+            
+            
+            
             fake_rail_joint_index = nodes[start_candidate_node]["All"].index(sw_candidate_position)
             
+        
             if fake_rail_joint_index == 0:
                 sw_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 1]
                 start_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 2]
@@ -694,8 +707,9 @@ def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw
     start_rail_joint_data = None
     candidate_found = False
     
-    while (rail_joint_found == False):  
-        print("Candidate node:",start_candidate_node)
+    while (rail_joint_found == False): 
+        if test: 
+            print("Candidate node:",start_candidate_node)
         if start_candidate_node in railJoint:
             start_rail_joint_data = railJoint[start_candidate_node]
             rail_joint_found = True
@@ -727,7 +741,8 @@ def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw
                             if switches_data[i]["Start"] == start_candidate_node:
                                 start_candidate_node = switches_data[i]["Continue"]
                                 candidate_found = True
-                                print("Found!",start_candidate_node)
+                                if test:
+                                    print("Found!",start_candidate_node)
                                 break
                         if candidate_found == False:
                             break
@@ -741,14 +756,18 @@ def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw
                             #print(i,switches_data[i]["Start"])
                             if switches_data[i]["Start"] == start_candidate_node:
                                 start_candidate_node = switches_data[i]["Continue"]
-                                #print("Found!")
+                                candidate_found = True
+                                if test:
+                                    print("Found!",start_candidate_node)
                                 break
+                        if candidate_found == False:
                             break
                     else:
                         if test:
                             print("There is a forward switch or the end of the railway")
                         break
             elif mode == "Branch":
+                candidate_found = False
                 # If continue position before switch
                 #print(start_candidate_node,candidate_position,sw_position)
                 if candidate_position[0] > sw_position[0]:
@@ -756,9 +775,12 @@ def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw
                         for i in switches_data:
                             #print(i,switches_data[i]["Start"])
                             if switches_data[i]["Start"] == start_candidate_node:
-                                start_candidate_node = switches_data[i]["Branch"]
-                                #print("Found!")
+                                start_candidate_node = switches_data[i]["Continue"]
+                                candidate_found = True
+                                if test:
+                                    print("Found!",start_candidate_node)
                                 break
+                        if candidate_found == False:
                             break
                     else:
                         if test:
@@ -769,16 +791,19 @@ def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw
                         for i in switches_data:
                             #print(i,switches_data[i]["Start"])
                             if switches_data[i]["Start"] == start_candidate_node:
-                                start_candidate_node = switches_data[i]["Branch"]
-                                #print("Found!")
+                                start_candidate_node = switches_data[i]["Continue"]
+                                candidate_found = True
+                                if test:
+                                    print("Found!",start_candidate_node)
                                 break
+                        if candidate_found == False:
                             break
                     else:
                         if test:
                             print("There is a forward switch or the end of the railway")
                         break
-        #break
-    print("Leaving")
+    if test:
+        print("Leaving")
     return start_candidate_node,rail_joint_found,start_rail_joint_data
 
 # Calculate the signal position in the same line as the switch and node, before the joint
