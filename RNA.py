@@ -475,77 +475,34 @@ def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements,bufferSt
     #print(nodes)
     
     with open(file, "w") as f: 
-        #f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
+        f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
         
         semaphores = {}
         
         railJoint = create_railJoint(trainDetectionElements)
         #print(railJoint)
         
-        source = analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops)
+        semaphores,switches_data = analyze_switches(nodes,netPaths,switchesIS,railJoint,semaphores)
+        #print(semaphores)
         
-        #print(source)
-        
-        
-        for i in switchesIS:
-            
-            danger_spot = switchesIS[i]
-            start_node = danger_spot["Node"]
-            
-            continue_course = danger_spot["ContinueCourse"][0].upper() + danger_spot["ContinueCourse"][1:]
-            branch_course = danger_spot["BranchCourse"][0].upper() + danger_spot["BranchCourse"][1:]
-            
-            continue_nodes = danger_spot[continue_course+"Branch"]
-            continue_node = identify_relations(continue_nodes)[:-1]
-            continue_node.remove(start_node)
-            continue_node = continue_node[0]
-            
-            branch_nodes = danger_spot[branch_course+"Branch"]
-            branch_node = identify_relations(branch_nodes)[:-1]
-            branch_node.remove(start_node)
-            branch_node = branch_node[0]
-            
-            #print(start_node,continue_node,branch_node)
-            
-            pos_sw          = switchesIS[i]["Position"]
-            pos_start       = nodes[start_node]["Begin"] if switchesIS[i]["Position"] == nodes[start_node]["End"] else nodes[start_node]["End"]
-            pos_continue    = nodes[continue_node]["Begin"] if switchesIS[i]["Position"] == nodes[continue_node]["End"] else nodes[continue_node]["End"]
-            pos_branch      = nodes[branch_node]["Begin"] if switchesIS[i]["Position"] == nodes[branch_node]["End"] else nodes[branch_node]["End"]
-            
-            n_start = nodes[start_node]["Lines"]
-            n_continue = nodes[continue_node]["Lines"]
-            n_branch = nodes[branch_node]["Lines"] 
-            
-            #print(pos_start,pos_continue,pos_branch)
-            
-            continue_straight, branch_straight = calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch)
-            
-            semaphore_source = {'Node':i,"Switch":pos_sw,'Start':[start_node,pos_start,n_start],'Continue':[continue_node,pos_continue,n_continue,continue_straight],'Branch':[branch_node,pos_branch,n_branch,branch_straight]}
-            
-            #print(semaphore_source)
-            create_semaphore(semaphores,semaphore_source,railJoint) 
-            
-            f.write(f'{i} @ ({pos_sw[0]},{pos_sw[1]})\n')
-            f.write(f'\tStart: {start_node} @ ({pos_start[0]},{pos_start[1]}) > ({pos_sw[0]},{pos_sw[1]})\n')
-            f.write(f'\tContinue > {continue_course} [{n_continue} {"--" if continue_straight else "/"} ] : {continue_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_continue[0]},{pos_continue[1]})\n')
-            f.write(f'\tBranch > {branch_course} [{n_branch} {"--" if branch_straight else "/"} ] : {branch_node} @ ({pos_sw[0]},{pos_sw[1]}) > ({pos_branch[0]},{pos_branch[1]})\n')
-        
+        for switch in switches_data:
+            f.write(f'Switch: {switch} @\n')
+            f.write(f'\tStart: {switches_data[switch]["Start"]} @ {nodes[switches_data[switch]["Start"]]["Begin"]}-{nodes[switches_data[switch]["Start"]]["End"]}\n')
+            f.write(f'\tContinue: {switches_data[switch]["Continue"]} @ {nodes[switches_data[switch]["Continue"]]["Begin"]}-{nodes[switches_data[switch]["Continue"]]["End"]}\n')
+            f.write(f'\tBranch: {switches_data[switch]["Branch"]} @ {nodes[switches_data[switch]["Branch"]]["Begin"]}-{nodes[switches_data[switch]["Branch"]]["End"]}\n')
         f.close()
-
-    #print(semaphores)
+        
     return semaphores
 
-def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
+def analyze_switches(nodes,netPaths,switchesIS,railJoint,semaphores):
     switches_data = {}
-    
-    #print("Net:",netPaths)
     
     for switch in switchesIS:
         # Find the switch info
         sw_info = switchesIS[switch]
         
         switches_data[switch] = {}
-                
+        
         [begin_right, end_right, name] = identify_relations(sw_info["RightBranch"])
         [begin_left, end_left, name] = identify_relations(sw_info["LeftBranch"])
         
@@ -568,15 +525,12 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
             # Branch course is left
             switches_data[switch] |= {'Branch':end_left}
     
-    #print("switches_data:",switches_data)
-    #print("SW:",switchesIS)
-    #print("J:",railJoint)
-    
     for switch in switchesIS:
         # Find the switch info
         sw_info = switchesIS[switch]
         # Find the switch position
         sw_position = sw_info["Position"]
+        switches_data[switch] |= {'Position':sw_position}
         
         # Find the start node
         start_node = sw_info["Node"]
@@ -601,17 +555,14 @@ def analyze_switches(nodes,netPaths,switchesIS,railJoint,bufferStops):
         branch_node = branch_node[0]
         branch_position = nodes[branch_node]["Begin"] if sw_position == nodes[branch_node]["End"] else nodes[branch_node]["End"]
         
-        switches_data = calculate_start_position(start_node,start_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
-        #print(switches_data)
-        switches_data = calculate_start_position(continue_node,continue_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
-        #print(switches_data)
-        switches_data = calculate_start_position(branch_node,branch_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data)
-        #print(switches_data)
+        semaphores = calculate_start_position(start_node,start_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data,semaphores)
+        semaphores = calculate_start_position(continue_node,continue_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data,semaphores)
+        semaphores = calculate_start_position(branch_node,branch_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data,semaphores)
         
-    return switches_data
+    return semaphores,switches_data
 
 # Calculate the signal position given the start position, the switch position and the rail joint position
-def calculate_start_position(candidate_node,candidate_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data):
+def calculate_start_position(candidate_node,candidate_position,switch,sw_position,nodes,netPaths,switchesIS,railJoint,switches_data,semaphores):
     modes = ["Start","Continue","Branch"]
     
     for mode in modes:
@@ -648,7 +599,6 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
         if nodes[start_candidate_node]["Lines"] > 1:
             # Calculate the signal position before the curve before the switch node
             start_candidate_position = candidate_position
-            
             aux_mode = mode if mode != "Branch" else "Continue"
 
             if candidate_node == start_candidate_node:
@@ -663,13 +613,8 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
                 
             start_rail_joint_position = None
             #print(start_candidate_node,nodes[start_candidate_node],start_candidate_position,sw_candidate_position)
-            
-            
-            
-            
             fake_rail_joint_index = nodes[start_candidate_node]["All"].index(sw_candidate_position)
             
-        
             if fake_rail_joint_index == 0:
                 sw_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 1]
                 start_candidate_position = nodes[start_candidate_node]["All"][fake_rail_joint_index + 2]
@@ -694,11 +639,14 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
         
     #print(mode,switch,candidate_node,start_candidate_position,sw_candidate_position,start_rail_joint_position,start_signal_position)
     
-    print(mode,switch,candidate_node,start_signal_position)
+    # Update semaphore
+    sem_type = "Maneuver" if mode == "Branch" else "Straight" 
+    direction = "Left" if start_signal_position[0] < sw_candidate_position[0] else "Right" 
+    semaphores["Sig"+str(len(semaphores)+1).zfill(2)] = {"Net":start_candidate_node,"Switch":switch_candidate,"Type":sem_type,"Direction":direction,"Position":start_signal_position}
     
-    #switches_data[switch] = {"A":candidate_node}
+    #print(" ",mode,switch,candidate_node,start_signal_position)
     
-    return switches_data
+    return semaphores
 
 # Get the candidate node for the switch
 def get_candidate_node(mode,railJoint,start_candidate_node,candidate_position,sw_position,netPaths,switches_data, test = True):
@@ -871,14 +819,18 @@ def export_semaphores(file,semaphores):
     with open(file, "w") as f: 
         #print(semaphores)
         for sig in semaphores:
-            f.write(f'Sig{str(sig).zfill(2)}:\n')
+            f.write(f'{str(sig).zfill(2)}:\n')
             f.write(f'\tNet: {semaphores[sig]["Net"]}\n')
+            f.write(f'\tSwitch: {semaphores[sig]["Switch"]}\n')
             f.write(f'\tType: {semaphores[sig]["Type"]}\n')
             f.write(f'\tDirection: {semaphores[sig]["Direction"]} \n')
             f.write(f'\tPosition: {semaphores[sig]["Position"]}\n')
-            f.write(f'\tCoordinate: {semaphores[sig]["Coordinate"]}\n')
         f.close()
-        
+    
+    # Create que semaphore object
+    
+    
+    
 def create_semaphore(semaphores,semaphore_source,railJoint):
 
     n = len(semaphores)+1
@@ -966,13 +918,6 @@ def analyzing_object(object):
     infrastructure = object.Infrastructure.FunctionalInfrastructure
     visualization = object.Infrastructure.InfrastructureVisualizations
     
-    # TODO
-    #   - Use the node position to fix the prev/next node based on relation                 DONE
-    #   - Don't re-read the node information                                                DONE
-    #   - Refactor the danger detector to get the semaphore positions for any direction
-    #   - Create the semaphore data
-    #   - Create the new semaphore object
-    
     print(" Analyzing graph")
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)   # TODO IF THE NET WAS NOT CREATING IN ORDER THERE IS A FAIL
     
@@ -989,7 +934,7 @@ def analyzing_object(object):
     
     semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
     
-    #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores)
+    export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores)
     
     #print(" Analyzing danger zones --> Danger.RNA")
 # %%
