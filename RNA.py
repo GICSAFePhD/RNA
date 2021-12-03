@@ -1,4 +1,5 @@
 
+from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
 #%%%
@@ -353,7 +354,7 @@ def detect_trainDetectionElements(infrastructure,visualization):
     #print(trainDetectionElements)
     return trainDetectionElements
 
-def analyzing_infrastructure(nodes,infrastructure,visualization):
+def analyzing_infrastructure(infrastructure,visualization):
     # borders
     try:
         borders = detect_borders(infrastructure)
@@ -395,7 +396,7 @@ def analyzing_infrastructure(nodes,infrastructure,visualization):
     # trainDetectionElements
     trainDetectionElements = detect_trainDetectionElements(infrastructure,visualization)
 
-    return nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
+    return borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
     
@@ -642,7 +643,11 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
     # Update semaphore
     sem_type = "Maneuver" if mode == "Branch" else "Straight" 
     direction = "left" if start_signal_position[0] < sw_candidate_position[0] else "right" 
-    semaphores["sig"+str(len(semaphores)+1).zfill(2)] = {"Net":start_candidate_node,"Switch":switch_candidate,"Type":sem_type,"Direction":direction,"Position":start_signal_position}
+    
+    
+    print(start_signal_position,nodes[start_candidate_node]["All"])
+    intrinsic_coordinate = calculate_intrinsic_coordinate(start_signal_position,nodes[start_candidate_node]["All"])
+    semaphores["sig"+str(len(semaphores)+1).zfill(2)] = {"Net":start_candidate_node,"Switch":switch_candidate,"Type":sem_type,"Direction":direction,"Position":start_signal_position,"Coordinate":intrinsic_coordinate}
     
     #print(" ",mode,switch,candidate_node,start_signal_position)
     
@@ -827,10 +832,9 @@ def export_semaphores(file,semaphores,object):
             f.write(f'\tPosition: {semaphores[sig]["Position"]}\n')
         f.close()
     
-    print(semaphores)
-    #print(list(semaphores))
-    # Create que semaphore object
+    #print(semaphores)
     
+    # Create que semaphore object
     if (object.Infrastructure.FunctionalInfrastructure.SignalsIS == None):
         print(" No signals found --> Creating new signalling structure")
         object.Infrastructure.FunctionalInfrastructure.create_SignalsIS()
@@ -853,7 +857,7 @@ def export_semaphores(file,semaphores,object):
                 sem.SpotLocation[0].NetElementRef = semaphores[list(semaphores)[i]]["Net"]  # NetElementRef="ne15" 
                 direction = "normal" if semaphores[list(semaphores)[i]]["Direction"] =="left" else "reverse"
                 sem.SpotLocation[0].ApplicationDirection  = direction                       # ApplicationDirection="normal" 
-                sem.SpotLocation[0].IntrinsicCoord = "0.000"                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
+                sem.SpotLocation[0].IntrinsicCoord = semaphores[list(semaphores)[i]]["Coordinate"]                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
                 # Create Designator
                 sem.create_Designator()
                 sem.Designator[0].Register = "_Example"     # Register="_Example" 
@@ -863,9 +867,30 @@ def export_semaphores(file,semaphores,object):
                 sem.SignalConstruction[0].Type = "light"               # Type
                 sem.SignalConstruction[0].PositionAtTrack = semaphores[list(semaphores)[i]]["Direction"]    # PositionAtTrack
                 
-                print(object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i])
+                #print(object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i])
+
+# Calculate intrindic coordinate
+def calculate_intrinsic_coordinate(position,points):
+    intrinsic_coordinate = 0
     
+    first_point = points[0]
+    length = 0
+    for p in points[1:]:
+        if (position[0] > first_point[0] and position[0] < p[0]) or (position[0] < first_point[0] and position[0] > p[0]):
+            intrinsic_coordinate += length_between_points(first_point,position)
+        else:
+            intrinsic_coordinate += length_between_points(first_point,p)
+        
+        length += length_between_points(first_point,p)
+        first_point = p
     
+    intrinsic_coordinate /= length
+    return str(intrinsic_coordinate)[:6]
+
+# Calculate the length between two points
+def length_between_points(point_a,point_b):
+    return ((point_a[0]-point_b[0])**2 + (point_a[1]-point_b[1])**2)**0.5
+
 def create_semaphore(semaphores,semaphore_source,railJoint):
 
     n = len(semaphores)+1
@@ -945,7 +970,7 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     #print(pos_continue["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)),pos_branch["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)))
     
     return continue_straight, branch_straight
-#%%%
+##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements
@@ -959,7 +984,7 @@ def analyzing_object(object):
     #print(netPaths)
     
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    nodes,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(nodes,infrastructure,visualization)
+    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
     
     #print(bufferStops)
     
@@ -968,7 +993,7 @@ def analyzing_object(object):
     print(" Detecting Danger --> Signalling.RNA")
     
     semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
-    
+    #print(nodes)
     export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
     
     #print(" Analyzing danger zones --> Danger.RNA")
