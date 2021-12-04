@@ -35,7 +35,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         f.write('<railML xmlns="https://www.railml.org/schemas/3.1" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:gml="http://www.opengis.net/gml/3.2/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.railml.org/schemas/3.1 https://www.railml.org/schemas/3.1/railml3.xsd" version="3.1">\n')
 
-        save_xml(RML,f,ignore = ignore, test = False)
+        save_xml(RML,f,ignore = {None}, test = False)
         
         f.close()
 #%%
@@ -881,7 +881,7 @@ def export_semaphores(file,semaphores,object):
             # Create atributes
             #print(list(semaphores)[i] )
             #print(sem.SpotElementProjection[visualization_length+i].__dict__) 
-            sem.SpotElementProjection[visualization_length+i].RefersToElement = "a"+list(semaphores)[i][1:] # TODO IF "sig" -> IT IS NOT PRINTED!
+            sem.SpotElementProjection[visualization_length+i].RefersToElement = list(semaphores)[i] # TODO IF "sig" -> IT IS NOT PRINTED!
             sem.SpotElementProjection[visualization_length+i].Id = "vis01_sep"+str(visualization_length+i+1)
             # Create name
             sem.SpotElementProjection[visualization_length+i].create_Name()
@@ -891,13 +891,32 @@ def export_semaphores(file,semaphores,object):
             sem.SpotElementProjection[visualization_length+i].create_Coordinate()
             sem.SpotElementProjection[visualization_length+i].Coordinate[0].X = str(semaphores[list(semaphores)[i]]["Position"][0])
             sem.SpotElementProjection[visualization_length+i].Coordinate[0].Y = str(semaphores[list(semaphores)[i]]["Position"][1])
-    #print(object.Infrastructure.InfrastructureVisualizations.Visualization)
     
-    # Create infrastructure.infrastructureVisualizations.visualization
-    #<spotElementProjection refersToElement="sig89" id="vis01_sep06">
-    #    <name name="S07" language="en"/>
-    #    <coordinate x="-766.605" y="-450.000"/>
-                
+    # Create semaphore for AssetsForIL
+    if (object.Interlocking.AssetsForIL != None):
+        # Create SignalsIL
+        AssetsForIL = object.Interlocking.AssetsForIL[0]
+        AssetsForIL.create_SignalsIL()
+        sem = AssetsForIL.SignalsIL
+        # Add new SignalIL for each semaphore
+        for i in range(len(semaphores)):
+            sem.create_SignalIL()
+            # Create atributes
+            sem.SignalIL[i].Id = "il_"+list(semaphores)[i]                # Id
+            sem.SignalIL[i].IsVirtual = "false"                           # IsVirtual
+            sem.SignalIL[i].ApproachSpeed = "0"                           # ApproachSpeed
+            sem.SignalIL[i].PassingSpeed = "0"                            # PassingSpeed
+            sem.SignalIL[i].ReleaseSpeed = "0"                            # ReleaseSpeed
+            # Create RefersTo
+            sem.SignalIL[i].create_RefersTo()
+            sem.SignalIL[i].RefersTo.Ref = list(semaphores)[i]            # RefersTo
+        print(sem)
+        
+        # Create Routes
+        AssetsForIL.create_Routes()
+        routes = AssetsForIL.Routes
+        
+        #print(object.Interlocking.AssetsForIL)
                 
                 
                 
