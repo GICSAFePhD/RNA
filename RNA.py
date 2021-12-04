@@ -645,7 +645,7 @@ def calculate_start_position(candidate_node,candidate_position,switch,sw_positio
     direction = "left" if start_signal_position[0] < sw_candidate_position[0] else "right" 
     
     
-    print(start_signal_position,nodes[start_candidate_node]["All"])
+    #print(start_signal_position,nodes[start_candidate_node]["All"])
     intrinsic_coordinate = calculate_intrinsic_coordinate(start_signal_position,nodes[start_candidate_node]["All"])
     semaphores["sig"+str(len(semaphores)+1).zfill(2)] = {"Net":start_candidate_node,"Switch":switch_candidate,"Type":sem_type,"Direction":direction,"Position":start_signal_position,"Coordinate":intrinsic_coordinate}
     
@@ -835,6 +835,8 @@ def export_semaphores(file,semaphores,object):
     #print(semaphores)
     
     # Create que semaphore object
+    
+    # Create semaphore for FunctionalInfrastructure
     if (object.Infrastructure.FunctionalInfrastructure.SignalsIS == None):
         print(" No signals found --> Creating new signalling structure")
         object.Infrastructure.FunctionalInfrastructure.create_SignalsIS()
@@ -849,25 +851,57 @@ def export_semaphores(file,semaphores,object):
                 sem.IsSwitchable = "false"                   # IsSwitchable
                 # Create name
                 sem.create_Name()
-                sem.Name[0].Name = "S"+list(semaphores)[i][-2:]     # Name
-                sem.Name[0].Language = "es"                         # Language
+                sem.Name[0].Name = "S"+sem.Id[-2:]     # Name
+                sem.Name[0].Language = "en"                         # Language
                 # Create SpotLocation
                 sem.create_SpotLocation()
-                sem.SpotLocation[0].Id = list(semaphores)[i]+"_sloc01"                      # Id="sig90_sloc01" 
-                sem.SpotLocation[0].NetElementRef = semaphores[list(semaphores)[i]]["Net"]  # NetElementRef="ne15" 
-                direction = "normal" if semaphores[list(semaphores)[i]]["Direction"] =="left" else "reverse"
+                sem.SpotLocation[0].Id = sem.Id+"_sloc01"                      # Id="sig90_sloc01" 
+                sem.SpotLocation[0].NetElementRef = semaphores[sem.Id]["Net"]  # NetElementRef="ne15" 
+                direction = "normal" if semaphores[sem.Id]["Direction"] =="left" else "reverse"
                 sem.SpotLocation[0].ApplicationDirection  = direction                       # ApplicationDirection="normal" 
-                sem.SpotLocation[0].IntrinsicCoord = semaphores[list(semaphores)[i]]["Coordinate"]                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
+                sem.SpotLocation[0].IntrinsicCoord = semaphores[sem.Id]["Coordinate"]                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
                 # Create Designator
                 sem.create_Designator()
                 sem.Designator[0].Register = "_Example"     # Register="_Example" 
-                sem.Designator[0].Entry = "SIGNAL S"+list(semaphores)[i][-2:]                                            # Entry="SIGNAL S07"
+                sem.Designator[0].Entry = "SIGNAL S"+sem.Id[-2:]                                            # Entry="SIGNAL S07"
                 # Create SignalConstruction
                 sem.create_SignalConstruction() 
                 sem.SignalConstruction[0].Type = "light"               # Type
-                sem.SignalConstruction[0].PositionAtTrack = semaphores[list(semaphores)[i]]["Direction"]    # PositionAtTrack
-                
+                sem.SignalConstruction[0].PositionAtTrack = semaphores[sem.Id]["Direction"]    # PositionAtTrack
                 #print(object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i])
+        
+    # Create semaphore for InfrastructureVisualizations
+    if (object.Infrastructure.InfrastructureVisualizations.Visualization != None):
+        visualization_length = len(object.Infrastructure.InfrastructureVisualizations.Visualization[0].SpotElementProjection)
+        
+        for i in range(len(semaphores)):
+            sem = object.Infrastructure.InfrastructureVisualizations.Visualization[0]
+            # Add new SpotElementProjection
+            sem.create_SpotElementProjection()
+            # Create atributes
+            #print(list(semaphores)[i] )
+            #print(sem.SpotElementProjection[visualization_length+i].__dict__) 
+            sem.SpotElementProjection[visualization_length+i].RefersToElement = "a"+list(semaphores)[i][1:] # TODO IF "sig" -> IT IS NOT PRINTED!
+            sem.SpotElementProjection[visualization_length+i].Id = "vis01_sep"+str(visualization_length+i+1)
+            # Create name
+            sem.SpotElementProjection[visualization_length+i].create_Name()
+            sem.SpotElementProjection[visualization_length+i].Name[0].Name = "S"+list(semaphores)[i][-2:]     # Name
+            sem.SpotElementProjection[visualization_length+i].Name[0].Language = "en"                         # Languag
+            # Create coordinate
+            sem.SpotElementProjection[visualization_length+i].create_Coordinate()
+            sem.SpotElementProjection[visualization_length+i].Coordinate[0].X = str(semaphores[list(semaphores)[i]]["Position"][0])
+            sem.SpotElementProjection[visualization_length+i].Coordinate[0].Y = str(semaphores[list(semaphores)[i]]["Position"][1])
+    #print(object.Infrastructure.InfrastructureVisualizations.Visualization)
+    
+    # Create infrastructure.infrastructureVisualizations.visualization
+    #<spotElementProjection refersToElement="sig89" id="vis01_sep06">
+    #    <name name="S07" language="en"/>
+    #    <coordinate x="-766.605" y="-450.000"/>
+                
+                
+                
+                
+                
 
 # Calculate intrindic coordinate
 def calculate_intrinsic_coordinate(position,points):
