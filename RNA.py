@@ -819,6 +819,7 @@ def create_railJoint(trainDetectionElements):
                 railJoint[trainDetectionElements[joint]["Node"]]["Joint"].append(trainDetectionElements[joint]["Name"])
     return railJoint
 
+# Export semaphores to file and object
 def export_semaphores(file,semaphores,object):
 
     with open(file, "w") as f: 
@@ -910,17 +911,19 @@ def export_semaphores(file,semaphores,object):
             # Create RefersTo
             sem.SignalIL[i].create_RefersTo()
             sem.SignalIL[i].RefersTo.Ref = list(semaphores)[i]            # RefersTo
-        print(sem)
         
         # Create Routes
         AssetsForIL.create_Routes()
         routes = AssetsForIL.Routes
-        
-        #print(object.Interlocking.AssetsForIL)
-                
-                
-                
-                
+
+# Export routes to file and object
+def export_routes(file,routes,object):
+    with open(file, "w") as f: 
+        f.write(f'TEST')
+        #print(semaphores)
+        for sig in routes:
+            f.write(f'TEST')
+        f.close()
 
 # Calculate intrindic coordinate
 def calculate_intrinsic_coordinate(position,points):
@@ -1023,6 +1026,29 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     #print(pos_continue["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)),pos_branch["Lines"],((y1 - y2) * (x1 - x3) == (y1 - y3) * (x1 - x2)))
     
     return continue_straight, branch_straight
+
+# Detect the routes
+def detect_routes(semaphores,netPaths):
+    routes = {}
+    
+    print(semaphores)
+    #print(netPaths)
+    
+    route = 1
+    for sig in semaphores:
+        #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
+        # Find the start semaphore with director + start node
+        start_signal = sig
+        start_node = semaphores[sig]["Net"]
+        # Find all the next nodes
+        end_nodes = [5,4,3] # TODO
+        # Find all the semaphores at the nodes with the same direction than the start semaphore
+        end_signals = [sig,sig,sig] # TODO
+        for i in range(len(end_signals)):   # TODO 
+            route += 1
+            print(f'Route_{route} : {start_signal}[{start_node}] to {end_signals[i]}|{end_nodes[i]}')
+    return routes
+
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1046,8 +1072,11 @@ def analyzing_object(object):
     print(" Detecting Danger --> Signalling.RNA")
     
     semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
-    #print(nodes)
     export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
+    
+    print(" Detecting Routes --> Routes.RNA")
+    routes = detect_routes(semaphores,netPaths)
+    export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
     
     #print(" Analyzing danger zones --> Danger.RNA")
 # %%
