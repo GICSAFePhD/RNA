@@ -82,7 +82,7 @@ def analyze_connectedness(neighbours):
                 zones[zone].extend([x for x in zones[zone+1] if (x not in zones[zone])])
                 del zones[zone+1]
     
-    print(f' Zones:{zones}')
+    #print(f' Zones:{zones}')
     
     if len(zones) > 1:
         return False
@@ -361,7 +361,7 @@ def analyzing_infrastructure(infrastructure,visualization):
     except:
         print("Error with borders")
         borders = {}
-        
+     
     # bufferStops
     try:
         bufferStops = detect_bufferStops(infrastructure)
@@ -386,7 +386,7 @@ def analyzing_infrastructure(infrastructure,visualization):
     
     # signalsIS
     signalsIS = detect_signalsIS(infrastructure)
-
+    
     # switchesIS
     switchesIS = detect_switchesIS(infrastructure,visualization)
     
@@ -1132,6 +1132,62 @@ def find_nodes(start_node,netPaths,semaphores):
     
     return end_nodes
 
+# Find signals for every node in the network
+def find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+    signals = {}
+
+    # Find signals for bufferStops
+    print(" Creating signals for bufferstops")
+    signals = find_signals_bufferStops(nodes,bufferStops,signals)
+
+    # Find signals for switches
+    print(" Creating signals for switches")
+    signals = find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
+
+    # Find signals for level crossings
+    print(" Creating signals for level crossings")
+    signals = find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals)
+
+    # Find signals for platforms
+    print(" Creating signals for platforms")
+    signals = find_signals_platforms(nodes,netPaths,platforms,signals)
+
+    # Reduce redundant signals
+    print(" Reducing redundant signals")
+    signals = reduce_signals(signals)
+
+    return signals
+
+# Find signals for bufferStops
+def find_signals_bufferStops(nodes,bufferStops,signals):
+    # Find every end of the network
+    # If the node is a bufferStop:
+        # Add circulation signal with the direction of the exit
+    # If the node is not a bufferStop:
+        # Add a ghost signal with the direction of the exit
+    
+    return signals
+
+# Find signals for bufferStops
+def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
+
+    return signals
+
+# Find signals for level crossings
+def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
+
+    return signals
+
+# Find signals for platforms
+def find_signals_platforms(nodes,netPaths,platforms,signals):
+
+    return signals
+
+# Reduce redundant signals
+def reduce_signals(signals):
+
+    return signals
+
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1149,19 +1205,19 @@ def analyzing_object(object):
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
     
     #print(bufferStops)
-    
-    export_analysis("F:\PhD\RailML\\Infrastructure.RNA",nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
+    infrastructure_file = "C:\PhD\RailML\\Infrastructure.RNA"
+    export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
     print(" Detecting Danger --> Signalling.RNA")
     
-    semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
-    export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
+    #signals_file = "C:\PhD\RailML\\Dangers.RNA"
+    signals = find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+
+    #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
+    #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
     
-    print(" Detecting Routes --> Routes.RNA")
-    routes = detect_routes(semaphores,netPaths)
+    #print(" Detecting Routes --> Routes.RNA")
+    #routes = detect_routes(semaphores,netPaths)
     #export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
     
     #print(" Analyzing danger zones --> Danger.RNA")
-# %%
-
-# %%
