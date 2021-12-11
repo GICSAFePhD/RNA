@@ -1175,7 +1175,9 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
 # Find signals for level crossings
 def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
+    # Find every level crossing on the network
 
+    
     return signals
 
 # Find signals for platforms
@@ -1187,6 +1189,21 @@ def find_signals_platforms(nodes,netPaths,platforms,signals):
 def reduce_signals(signals):
 
     return signals
+
+def export_signal(file,signals,object):
+
+    with open(file, "w") as f: 
+        #print(signals)
+        for sig in signals:
+            f.write(f'{str(sig).zfill(2)}:\n')
+            #f.write(f'\tNet: {signals[sig]["Net"]}\n')
+            #f.write(f'\tSwitch: {signals[sig]["Switch"]}\n')
+            #f.write(f'\tType: {signals[sig]["Type"]}\n')
+            #f.write(f'\tDirection: {signals[sig]["Direction"]} \n')
+            #f.write(f'\tPosition: {signals[sig]["Position"]}\n')
+        f.close()
+
+    return
 
 ##%%%
 def analyzing_object(object):
@@ -1212,6 +1229,8 @@ def analyzing_object(object):
     
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+
+    export_signal("C:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
     #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
