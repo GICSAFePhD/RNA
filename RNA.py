@@ -1,4 +1,5 @@
 
+from re import S
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
@@ -1176,17 +1177,20 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 # Find signals for level crossings
 def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
     # Find every level crossing on the network
+        # Add an entrance signal and an exit signal
 
-    
     return signals
 
 # Find signals for platforms
 def find_signals_platforms(nodes,netPaths,platforms,signals):
+    # Find every platform on the network
+        # Add an entrance signal and an exit signal
 
     return signals
 
 # Reduce redundant signals
 def reduce_signals(signals):
+    # TODO
 
     return signals
 
@@ -1204,6 +1208,119 @@ def export_signal(file,signals,object):
         f.close()
 
     return
+
+def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+    signal_placement = {}
+    step = 0.05
+    # print(nodes)    # Nodes' Positions
+    # print(netPaths) # Nodes' connections
+    # print(switchesIS) # Switches'
+
+    # Adapting railJoints to be node friendly
+    railJoints = {}
+
+    for element in trainDetectionElements:
+        if "RailJoint" in trainDetectionElements[element]["Type"]:
+            if trainDetectionElements[element]["Node"] not in railJoints:
+                railJoints[trainDetectionElements[element]["Node"]] = {}
+            railJoints[trainDetectionElements[element]["Node"]] |= {"Joint":trainDetectionElements[element]["Name"],"Coordinate":trainDetectionElements[element]["Coordinate"],"Position":trainDetectionElements[element]["Position"]}
+
+    # Adapting platforms to be node friendly
+    platforms_node = {}
+
+    #print(platforms)
+    #for platform in platforms: # TODO
+
+    # Adapting levelCrossings to be node friendly
+    crossing_nodes = {}
+
+    #print(levelCrossings)
+    #for crossing in levelCrossings: # TODO   
+
+
+    # Mode around every node
+    for node in nodes:
+        #print(node)
+        
+        # Check if there is a RailJoint, Platform, LevelCrossing or curve.
+        # If there is a RailJoint:
+        if node in railJoints:
+            railJoint_position = railJoints[node]["Position"]
+            print(f"  {node} has a RailJoint[{railJoints[node]['Joint']}] @ {railJoint_position}")
+            if node not in signal_placement:
+                signal_placement[node] = {"Next":[],"Prev":[]}
+
+            # next_position = RailJoint_position - one step
+            next_place = signal_placement[node]["Next"]
+            next_place.append([round(railJoint_position[0]*(1-step),1),round(railJoint_position[1]*(1-step),1)])
+
+            # prev_position = RailJoint_position + one step
+            prev_place = signal_placement[node]["Prev"]
+            prev_place.append([round(railJoint_position[0]*(1+step),1),round(railJoint_position[1]*(1+step),1)])
+
+            # Upload both positions to the node
+            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}         
+            
+        # If there is a Platform:
+        if node in platforms_node:
+            platform_position = platforms_node[node]["Position"]
+            print(f'  {node} has a Platform[{platforms_node[node]["Platform"]}] @ {platform_position}')
+            if node not in signal_placement:
+                signal_placement[node] = {"Next":[],"Prev":[]}
+
+            # next_position = Platform_position - one step
+            next_place = signal_placement[node]["Next"]
+            next_place.append([round(platform_position[0]*(1-step),1),round(platform_position[1]*(1-step),1)])
+
+            # prev_position = Platform_position + one step 
+            prev_place = signal_placement[node]["Prev"]
+            prev_place.append([round(platform_position[0]*(1+step),1),round(platform_position[1]*(1+step),1)])
+
+            # Upload both positions to the node
+            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+
+        # If there is a LevelCrossing:
+            if node in crossing_nodes:
+                crossing_positions = crossing_nodes[node]["Position"]
+                print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Crossing"]}] @ {crossing_positions}')
+                if node not in signal_placement:
+                    signal_placement[node] = {"Next":[],"Prev":[]}
+
+                # next_position = LevelCrossing_position - one step    
+                next_place = signal_placement[node]["Next"]
+                next_place.append([round(crossing_positions[0]*(1-step),1),round(crossing_positions[1]*(1-step),1)])
+
+                # prev_position = LevelCrossing_position + one step
+                prev_place = signal_placement[node]["Prev"]
+                prev_place.append([round(crossing_positions[0]*(1+step),1),round(crossing_positions[1]*(1+step),1)])
+
+                # Upload both positions to the node
+                signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+
+        # If there is a curve:
+        if nodes[node]["Lines"] > 1:
+            curve_positions  = nodes[node]["All"][1:-1]
+            print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
+            if node not in signal_placement:
+                signal_placement[node] = {"Next":[],"Prev":[]}
+
+            # next_position = curve_position(previous node, close to the curve) - one step
+            next_place = signal_placement[node]["Next"]
+
+            for curve in curve_positions:
+                next_place.append([round(curve[0]*(1-step),1),round(curve[1]*(1-step),1)])  # TODO: ADAPT TO CURVES!
+
+            # prev_position = curve_position(next node, close to the curve) + one step
+            prev_place = signal_placement[node]["Prev"]
+
+            for curve in curve_positions:
+                prev_place.append([round(curve[0]*(1+step),1),round(curve[1]*(1+step),1)])  # TODO: ADAPT TO CURVES!
+
+            # Upload both positions to the node
+            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+
+    return signal_placement
+
 
 ##%%%
 def analyzing_object(object):
@@ -1227,6 +1344,9 @@ def analyzing_object(object):
     
     print(" Detecting Danger --> Signalling.RNA")
     
+    signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+    print(f' Signal (possible) places:{signal_placement}')
+
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
 
