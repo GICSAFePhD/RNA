@@ -93,6 +93,7 @@ def analyze_connectedness(neighbours):
 def analyzing_graph(netElements,netRelations):
     
     nodes = get_nodes(netElements)
+    nodes = order_nodes_points(nodes)
     netPaths = get_relations(nodes,netRelations)
     neighbours,switches = get_neighbours_and_switches(nodes,netElements) 
     limits = get_limits(switches)
@@ -362,7 +363,7 @@ def analyzing_infrastructure(infrastructure,visualization):
     except:
         print("Error with borders")
         borders = {}
-     
+    
     # bufferStops
     try:
         bufferStops = detect_bufferStops(infrastructure)
@@ -1211,7 +1212,7 @@ def export_signal(file,signals,object):
 
 def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signal_placement = {}
-    step = 0.05
+    step = 100
     # print(nodes)    # Nodes' Positions
     # print(netPaths) # Nodes' connections
     # print(switchesIS) # Switches'
@@ -1237,8 +1238,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     #print(levelCrossings)
     #for crossing in levelCrossings: # TODO   
 
-
-    # Mode around every node
+    # Move around every node
     for node in nodes:
         #print(node)
         
@@ -1252,15 +1252,15 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
             # next_position = RailJoint_position - one step
             next_place = signal_placement[node]["Next"]
-            next_place.append([round(railJoint_position[0]*(1-step),1),round(railJoint_position[1]*(1-step),1)])
+            next_place.append([round(railJoint_position[0]-step,1),round(railJoint_position[1],1)])
 
             # prev_position = RailJoint_position + one step
             prev_place = signal_placement[node]["Prev"]
-            prev_place.append([round(railJoint_position[0]*(1+step),1),round(railJoint_position[1]*(1+step),1)])
+            prev_place.append([round(railJoint_position[0]+step,1),round(railJoint_position[1],1)])
 
             # Upload both positions to the node
             signal_placement[node] |= {"Next":next_place,"Prev":prev_place}         
-            
+        
         # If there is a Platform:
         if node in platforms_node:
             platform_position = platforms_node[node]["Position"]
@@ -1270,58 +1270,103 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
             # next_position = Platform_position - one step
             next_place = signal_placement[node]["Next"]
-            next_place.append([round(platform_position[0]*(1-step),1),round(platform_position[1]*(1-step),1)])
+            next_place.append([round(platform_position[0]-step,1),round(platform_position[1],1)])
 
             # prev_position = Platform_position + one step 
             prev_place = signal_placement[node]["Prev"]
-            prev_place.append([round(platform_position[0]*(1+step),1),round(platform_position[1]*(1+step),1)])
+            prev_place.append([round(platform_position[0]+step,1),round(platform_position[1],1)])
 
             # Upload both positions to the node
             signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
 
         # If there is a LevelCrossing:
-            if node in crossing_nodes:
-                crossing_positions = crossing_nodes[node]["Position"]
-                print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Crossing"]}] @ {crossing_positions}')
-                if node not in signal_placement:
-                    signal_placement[node] = {"Next":[],"Prev":[]}
+        if node in crossing_nodes:
+            crossing_positions = crossing_nodes[node]["Position"]
+            print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Crossing"]}] @ {crossing_positions}')
+            if node not in signal_placement:
+                signal_placement[node] = {"Next":[],"Prev":[]}
 
-                # next_position = LevelCrossing_position - one step    
-                next_place = signal_placement[node]["Next"]
-                next_place.append([round(crossing_positions[0]*(1-step),1),round(crossing_positions[1]*(1-step),1)])
+            # next_position = LevelCrossing_position - one step    
+            next_place = signal_placement[node]["Next"]
+            next_place.append([round(crossing_positions[0]-step,1),round(crossing_positions[1],1)])
 
-                # prev_position = LevelCrossing_position + one step
-                prev_place = signal_placement[node]["Prev"]
-                prev_place.append([round(crossing_positions[0]*(1+step),1),round(crossing_positions[1]*(1+step),1)])
+            # prev_position = LevelCrossing_position + one step
+            prev_place = signal_placement[node]["Prev"]
+            prev_place.append([round(crossing_positions[0]+step,1),round(crossing_positions[1],1)])
 
-                # Upload both positions to the node
-                signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+            # Upload both positions to the node
+            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
 
         # If there is a curve:
         if nodes[node]["Lines"] > 1:
-            curve_positions  = nodes[node]["All"][1:-1]
+            all_points = nodes[node]["All"]
+            curve_positions  = all_points[1:-1]
             print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
+            
+            # Find orientation of the curve
+            orientation = []
+            for point in range(len(all_points)-1):
+                if all_points[point][1] == all_points[point+1][1]:
+                    orientation.append("-")
+                else:
+                    orientation.append("/")
+            
+            #print(node,orientation)
+            
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
             # next_position = curve_position(previous node, close to the curve) - one step
             next_place = signal_placement[node]["Next"]
 
-            for curve in curve_positions:
-                next_place.append([round(curve[0]*(1-step),1),round(curve[1]*(1-step),1)])  # TODO: ADAPT TO CURVES!
+            for curve in range(len(curve_positions)):
+                if orientation[curve+1] == "/":                        
+                    next_place.append([round(curve_positions[curve][0]-step,1),round(curve_positions[curve][1],1)])
 
             # prev_position = curve_position(next node, close to the curve) + one step
             prev_place = signal_placement[node]["Prev"]
 
-            for curve in curve_positions:
-                prev_place.append([round(curve[0]*(1+step),1),round(curve[1]*(1+step),1)])  # TODO: ADAPT TO CURVES!
+            for curve in range(len(curve_positions)):
+                if orientation[curve] == "/":                        
+                    prev_place.append([round(curve_positions[curve][0]+step,1),round(curve_positions[curve][1],1)])
 
             # Upload both positions to the node
             signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
 
+        # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
+        # Find middle point between switches
+
+    # Deleting the signal placements with only no members
+    for i in signal_placement:
+        if signal_placement[i]["Prev"] == []:
+            del signal_placement[i]["Prev"]
+        if signal_placement[i]["Next"] == []:
+            del signal_placement[i]["Next"]
+    
     return signal_placement
 
+# Order que "All" attribute for nodes:
+def order_nodes_points(nodes):
+    
+    for node in nodes:
+        nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
+    
+    return nodes
 
+def export_placement(file,nodes,signal_placement):
+
+    print(signal_placement)
+    with open(file, "w") as f: 
+        for sig in nodes:
+            if sig in signal_placement:
+                f.write(f'{str(sig).zfill(2)}:\n')
+                if "Next" in signal_placement[sig]:
+                    for next in signal_placement[sig]["Next"]:
+                        f.write(f'  Next: {next}\n')
+                if "Prev" in signal_placement[sig]:
+                    for prev in signal_placement[sig]["Prev"]:
+                        f.write(f'  Prev: {prev}\n')
+        f.close()
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1331,7 +1376,9 @@ def analyzing_object(object):
     visualization = object.Infrastructure.InfrastructureVisualizations
     
     print(" Analyzing graph")
-    nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)   # TODO IF THE NET WAS NOT CREATING IN ORDER THERE IS A FAIL
+    nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
+
+    
     
     #print(netPaths)
     
@@ -1339,18 +1386,21 @@ def analyzing_object(object):
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
     
     #print(bufferStops)
-    infrastructure_file = "C:\PhD\RailML\\Infrastructure.RNA"
+    infrastructure_file = "F:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
     print(" Detecting Danger --> Signalling.RNA")
     
     signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
-    print(f' Signal (possible) places:{signal_placement}')
+    safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
+    export_placement(safe_point_file,nodes,signal_placement)
+    
+    #print(f' Signal (possible) places:{signal_placement}')
 
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
 
-    export_signal("C:\PhD\RailML\\Signalling.RNA",signals,object)
+    export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
     #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
