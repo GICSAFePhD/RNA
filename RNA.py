@@ -1135,12 +1135,12 @@ def find_nodes(start_node,netPaths,semaphores):
     return end_nodes
 
 # Find signals for every node in the network
-def find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signals = {}
 
     # Find signals for bufferStops
     print(" Creating signals for bufferstops")
-    signals = find_signals_bufferStops(nodes,bufferStops,signals)
+    signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
 
     # Find signals for switches
     print(" Creating signals for switches")
@@ -1158,16 +1158,40 @@ def find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferS
     print(" Reducing redundant signals")
     signals = reduce_signals(signals)
 
+    for sig in signals:
+        intrinsic_coordinate = calculate_intrinsic_coordinate([signals[sig]["Position"][0],-signals[sig]["Position"][1]],nodes[signals[sig]["From"]]["All"])
+        signals[sig]["Coordinate"] = intrinsic_coordinate
     return signals
 
 # Find signals for bufferStops
-def find_signals_bufferStops(nodes,bufferStops,signals):
+def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
+    step = 100
+    #print(bufferStops)
     # Find every end of the network
-    # If the node is a bufferStop:
-        # Add circulation signal with the direction of the exit
-    # If the node is not a bufferStop:
-        # Add a ghost signal with the direction of the exit
-    
+    for node in nodes:
+        # If the node is a bufferStop:
+        if node in bufferStops:
+            # Add circulation signal with the direction of the exit
+            side = "Prev" if "Next" in netPaths[node] else "Next"
+            
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            
+            atTrack = "right" if side == "Prev" else "left"
+            
+            direction = "reverse" if side == "Prev" else "normal"
+            
+            position_index = "End" if side == "Next" else "Begin"
+            
+            print(node,netPaths[node],side,direction,nodes[node])
+            
+            if position_index == "End":
+                position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
+            else:
+                position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
+
+            #print(node,position_index,position)
+            signals[sig_number] = {"From":node,"To":bufferStops[node]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            print(sig_number,signals[sig_number])
     return signals
 
 # Find signals for bufferStops
@@ -1201,13 +1225,91 @@ def export_signal(file,signals,object):
         #print(signals)
         for sig in signals:
             f.write(f'{str(sig).zfill(2)}:\n')
-            #f.write(f'\tNet: {signals[sig]["Net"]}\n')
+            f.write(f'\tFrom: {signals[sig]["From"]} | To: {signals[sig]["To"]}\n')
             #f.write(f'\tSwitch: {signals[sig]["Switch"]}\n')
-            #f.write(f'\tType: {signals[sig]["Type"]}\n')
-            #f.write(f'\tDirection: {signals[sig]["Direction"]} \n')
-            #f.write(f'\tPosition: {signals[sig]["Position"]}\n')
+            f.write(f'\tType: {signals[sig]["Type"]} | Direction: {signals[sig]["Direction"]} | AtTrack: {signals[sig]["AtTrack"]} \n')
+            f.write(f'\tPosition: {signals[sig]["Position"]} | Coordinate: {signals[sig]["Coordinate"]}\n')
         f.close()
 
+    # Create que semaphore object
+    
+    # Create semaphore for FunctionalInfrastructure
+    if (object.Infrastructure.FunctionalInfrastructure.SignalsIS == None):
+        print(" No signals found --> Creating new signalling structure")
+        object.Infrastructure.FunctionalInfrastructure.create_SignalsIS()
+        if (object.Infrastructure.FunctionalInfrastructure.SignalsIS != None):
+            print(" Signals structure found!")    
+            for i in range(len(signals)):
+                object.Infrastructure.FunctionalInfrastructure.SignalsIS.create_SignalIS()
+                # Update the information
+                sem = object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i]
+                # Create atributes
+                sem.Id = list(signals)[i]                # Id
+                sem.IsSwitchable = "false"                   # IsSwitchable
+                # Create name
+                sem.create_Name()
+                sem.Name[0].Name = "S"+sem.Id[-2:]     # Name
+                sem.Name[0].Language = "en"                         # Language
+                # Create SpotLocation
+                sem.create_SpotLocation()
+                sem.SpotLocation[0].Id = sem.Id+"_sloc01"                      # Id="sig90_sloc01" 
+                sem.SpotLocation[0].NetElementRef = signals[sem.Id]["From"]  # NetElementRef="ne15" 
+                sem.SpotLocation[0].ApplicationDirection  = signals[sem.Id]["Direction"]                       # ApplicationDirection="normal" 
+                sem.SpotLocation[0].IntrinsicCoord = signals[sem.Id]["Coordinate"]                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
+                # Create Designator
+                sem.create_Designator()
+                sem.Designator[0].Register = "_Example"     # Register="_Example" 
+                sem.Designator[0].Entry = "SIGNAL S"+sem.Id[-2:]                                            # Entry="SIGNAL S07"
+                # Create SignalConstruction
+                sem.create_SignalConstruction() 
+                sem.SignalConstruction[0].Type = "light"               # Type
+                sem.SignalConstruction[0].PositionAtTrack = signals[sem.Id]["AtTrack"]    # PositionAtTrack
+                #print(object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i])
+        
+    # Create semaphore for InfrastructureVisualizations
+    if (object.Infrastructure.InfrastructureVisualizations.Visualization != None):
+        visualization_length = len(object.Infrastructure.InfrastructureVisualizations.Visualization[0].SpotElementProjection)
+        
+        for i in range(len(signals)):
+            sem = object.Infrastructure.InfrastructureVisualizations.Visualization[0]
+            # Add new SpotElementProjection
+            sem.create_SpotElementProjection()
+            # Create atributes
+            #print(list(semaphores)[i] )
+            #print(sem.SpotElementProjection[visualization_length+i].__dict__) 
+            sem.SpotElementProjection[visualization_length+i].RefersToElement = list(signals)[i] # TODO IF "sig" -> IT IS NOT PRINTED!
+            sem.SpotElementProjection[visualization_length+i].Id = "vis01_sep"+str(visualization_length+i+1)
+            # Create name
+            sem.SpotElementProjection[visualization_length+i].create_Name()
+            sem.SpotElementProjection[visualization_length+i].Name[0].Name = "S"+list(signals)[i][-2:]     # Name
+            sem.SpotElementProjection[visualization_length+i].Name[0].Language = "en"                         # Languag
+            # Create coordinate
+            sem.SpotElementProjection[visualization_length+i].create_Coordinate()
+            sem.SpotElementProjection[visualization_length+i].Coordinate[0].X = str(signals[list(signals)[i]]["Position"][0])
+            sem.SpotElementProjection[visualization_length+i].Coordinate[0].Y = str(signals[list(signals)[i]]["Position"][1])
+    
+    # Create semaphore for AssetsForIL
+    if (object.Interlocking.AssetsForIL != None):
+        # Create SignalsIL
+        AssetsForIL = object.Interlocking.AssetsForIL[0]
+        AssetsForIL.create_SignalsIL()
+        sem = AssetsForIL.SignalsIL
+        # Add new SignalIL for each semaphore
+        for i in range(len(signals)):
+            sem.create_SignalIL()
+            # Create atributes
+            sem.SignalIL[i].Id = "il_"+list(signals)[i]                # Id
+            sem.SignalIL[i].IsVirtual = "false"                           # IsVirtual
+            sem.SignalIL[i].ApproachSpeed = "0"                           # ApproachSpeed
+            sem.SignalIL[i].PassingSpeed = "0"                            # PassingSpeed
+            sem.SignalIL[i].ReleaseSpeed = "0"                            # ReleaseSpeed
+            # Create RefersTo
+            sem.SignalIL[i].create_RefersTo()
+            sem.SignalIL[i].RefersTo.Ref = list(signals)[i]            # RefersTo
+        
+        # Create Routes
+        #AssetsForIL.create_Routes()
+        #routes = AssetsForIL.Routes
     return
 
 def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
@@ -1334,7 +1436,28 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
 
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
-        # Find middle point between switches
+        if node not in signal_placement:
+            if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
+                
+                if node not in signal_placement:
+                    signal_placement[node] = {"Next":[],"Prev":[]}
+                
+                # Find middle point between switches
+                x_middle_point = (nodes[node]["Begin"][0]+nodes[node]["End"][0]) / 2
+                y_coordinate = nodes[node]["Begin"][1]
+                
+                print(f'  {node} has a middle point @ {[x_middle_point,y_coordinate]}')
+                
+                # next_position
+                next_place = signal_placement[node]["Next"]
+                next_place.append([round(x_middle_point-step,1),round(y_coordinate,1)])
+                
+                # prev_position
+                prev_place = signal_placement[node]["Prev"]
+                prev_place.append([round(x_middle_point+step,1),round(y_coordinate,1)])
+                
+                # Upload both positions to the node
+                signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
 
     # Deleting the signal placements with only no members
     for i in signal_placement:
@@ -1350,12 +1473,15 @@ def order_nodes_points(nodes):
     
     for node in nodes:
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
+        if nodes[node]["All"][0] != nodes[node]["Begin"]:
+            nodes[node]["Begin"] = nodes[node]["All"][0]
+            nodes[node]["End"] = nodes[node]["All"][-1]
     
     return nodes
 
 def export_placement(file,nodes,signal_placement):
 
-    print(signal_placement)
+    #print(signal_placement)
     with open(file, "w") as f: 
         for sig in nodes:
             if sig in signal_placement:
@@ -1377,8 +1503,6 @@ def analyzing_object(object):
     
     print(" Analyzing graph")
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
-
-    
     
     #print(netPaths)
     
@@ -1395,11 +1519,10 @@ def analyzing_object(object):
     safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
-    #print(f' Signal (possible) places:{signal_placement}')
+    print(f' Signal (possible) places:{signal_placement}')
 
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
-    signals = find_signals(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
-
+    signals = find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
