@@ -239,9 +239,11 @@ def detect_bufferStops(infrastructure):
     
     if infrastructure.BufferStops != None:
         for i in infrastructure.BufferStops[0].BufferStop:
-            if i.Id not in bufferStops.keys():
-                bufferStops[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Type":i.Type}
-    
+            if i.SpotLocation[0].NetElementRef not in bufferStops.keys():
+                bufferStops[i.SpotLocation[0].NetElementRef] = []
+            bufferStops[i.SpotLocation[0].NetElementRef].append({"Id":i.Id,"Type":i.Type,"Direction":i.SpotLocation[0].ApplicationDirection})
+            
+    #print(bufferStops)
     return bufferStops
 
 def detect_derailersIS(infrastructure):
@@ -402,8 +404,13 @@ def analyzing_infrastructure(infrastructure,visualization):
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
     
-    with open(file, "w") as f:        
-        f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+len(bufferStops)}\n')
+    with open(file, "w") as f:  
+        
+        buffer_size = 0
+        for i in bufferStops:
+            buffer_size += len(bufferStops[i])
+            
+        f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+buffer_size}\n')
         
         for i in netElementsId:
             f.write(f'Node {i}:\n')
@@ -433,7 +440,10 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
             
                 
             if i in bufferStops:
-                f.write(f'\tType = BufferStop -> {bufferStops[i]["Id"]}\n')
+                buffers = []
+                for bufferStop in bufferStops[i]:
+                    buffers.append(bufferStop["Id"])
+                f.write(f'\tType = BufferStop -> {buffers}\n')
                 
             f.write(f'\tNeighbours = {len(neighbours[i])} -> {neighbours[i]}\n')
             
@@ -1166,35 +1176,39 @@ def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetection
 # Find signals for bufferStops
 def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
     step = 100
-    #print(bufferStops)
+    print(bufferStops)
     # Find every end of the network
     for node in nodes:
         # If the node is a bufferStop:
         if node in bufferStops:
-            # Add circulation signal with the direction of the exit
-            side = "Prev" if "Next" in netPaths[node] else "Next"
-            
-            sig_number = "sig"+str(len(signals)+1).zfill(2)
-            
-            atTrack = "right" if side == "Prev" else "left"
-            
-            direction = "reverse" if side == "Prev" else "normal"
-            
-            position_index = "End" if side == "Next" else "Begin"
-            
-            print(node,netPaths[node],side,direction,nodes[node])
-            
-            if position_index == "End":
-                position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
-            else:
-                position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
-
-            #print(node,position_index,position)
-            signals[sig_number] = {"From":node,"To":bufferStops[node]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
-            print(sig_number,signals[sig_number])
+            for i in range(len(bufferStops[node])):
+                print(bufferStops[node][i])
+                # Add circulation signal with the direction of the exit
+                if node in netPaths:
+                    side = "Prev" if "Next" in netPaths[node] else "Next"
+                    position_index = "End" if side == "Next" else "Begin"
+                else:
+                    position_index = "Begin" if i == 0 else "End"
+                
+                sig_number = "sig"+str(len(signals)+1).zfill(2)
+                
+                atTrack = "left" if bufferStops[node][i]["Direction"] == "normal" else "Right"
+                direction = bufferStops[node][i]["Direction"]
+                
+                
+                #print(node,netPaths[node],side,direction,nodes[node])
+                
+                if position_index == "End":
+                    position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
+                else:
+                    position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
+                    
+                #print(node,position_index,position)
+                signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+                #print(sig_number,signals[sig_number])
     return signals
 
-# Find signals for bufferStops
+# Find signals for switches
 def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
 
     return signals
