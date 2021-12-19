@@ -1,5 +1,5 @@
 
-from re import S
+from re import L, S
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
@@ -256,13 +256,18 @@ def detect_derailersIS(infrastructure):
 
     return derailersIS
 
-def detect_levelCrossingsIS(infrastructure):
+def detect_levelCrossingsIS(infrastructure,visualization):
     levelCrossingsIS = {}
 
     if infrastructure.LevelCrossingsIS != None:
         for i in infrastructure.LevelCrossingsIS[0].LevelCrossingIS:
             if i.Id not in levelCrossingsIS.keys():
-                levelCrossingsIS[i.SpotLocation[0].NetElementRef] = {"Id":i.Id,"Lights":i.Protection[0].Lights,"Acoustic":i.Protection[0].Acoustic,"Protection":i.Protection[0].HasActiveProtection,"Barriers":i.Protection[0].Barriers}
+                levelCrossingsIS[i.Id] = {"Net":i.SpotLocation[0].NetElementRef,"Lights":i.Protection[0].Lights,"Acoustic":i.Protection[0].Acoustic,"Protection":i.Protection[0].HasActiveProtection,"Barriers":i.Protection[0].Barriers,"Coordinate":i.SpotLocation[0].IntrinsicCoord}
+    
+    if visualization.Visualization[0].SpotElementProjection != None:
+        for i in visualization.Visualization[0].SpotElementProjection:
+            if "lcr" in i.RefersToElement:
+                levelCrossingsIS[i.RefersToElement] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
     
     return levelCrossingsIS
 
@@ -377,7 +382,7 @@ def analyzing_infrastructure(infrastructure,visualization):
     derailersIS = detect_derailersIS(infrastructure)
     
     # levelCrossingsIS
-    levelCrossingsIS = detect_levelCrossingsIS(infrastructure)
+    levelCrossingsIS = detect_levelCrossingsIS(infrastructure,visualization)
     
     # lines
     lines = detect_lines(infrastructure)
@@ -410,7 +415,7 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
         for i in bufferStops:
             buffer_size += len(bufferStops[i])
             
-        f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+buffer_size}\n')
+        f.write(f'Nodes: {len(netElementsId)} | Switches: {len(switchesIS)} | Signals: {len(signalsIS)} | Detectors: {len(trainDetectionElements)} | Ends: {len(borders)+buffer_size} | Barriers: {len(levelCrossingsIS)}\n')
         
         for i in netElementsId:
             f.write(f'Node {i}:\n')
@@ -426,19 +431,18 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                     f.write(f'\t\tType -> {trainDetectionElements[j]["Type"]}\n')
                     if "Side" in trainDetectionElements[j]:
                         f.write(f'\t\tSide -> {trainDetectionElements[j]["Side"]}\n')
-                    
+            
             for j in derailersIS:
                 if i == j:
                     f.write(f'\tDerailer -> {derailersIS[i]["Id"]}\n')
                     f.write(f'\t\t Side -> {derailersIS[i]["Side"]}\n')
-                    
+            
             for j in borders:
                 if i == borders[j]["Node"]:
                     f.write(f'\tType = Border -> {j}\n')
                     f.write(f'\t\tType -> {borders[j]["Type"]}\n')
                     f.write(f'\t\tIsOpenEnd -> {borders[j]["IsOpenEnd"]}\n')
             
-                
             if i in bufferStops:
                 buffers = []
                 for bufferStop in bufferStops[i]:
@@ -453,13 +457,10 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                     f.write(f'\t\tSide -> {platforms[j]["Side"]}\n')
             
             for j in levelCrossingsIS:
-                if i == j:
-                    f.write(f'\tLevel crossing -> {levelCrossingsIS[j]["Id"]}\n')
-                    f.write(f'\t\tProtection -> {levelCrossingsIS[j]["Protection"]}\n')
-                    f.write(f'\t\tBarriers -> {levelCrossingsIS[j]["Barriers"]}\n')
-                    f.write(f'\t\tLights -> {levelCrossingsIS[j]["Lights"]}\n')
-                    f.write(f'\t\tAcoustic -> {levelCrossingsIS[j]["Acoustic"]}\n')
-                    
+                if i == levelCrossingsIS[j]["Net"]:
+                    f.write(f'\tLevel crossing -> {j}\n')
+                    f.write(f'\t\tProtection -> {levelCrossingsIS[j]["Protection"]} | Barriers -> {levelCrossingsIS[j]["Barriers"]} | Lights -> {levelCrossingsIS[j]["Lights"]} Acoustic -> {levelCrossingsIS[j]["Acoustic"]}\n')
+                    f.write(f'\t\tPosition -> {levelCrossingsIS[j]["Position"]} | Coordinate: {levelCrossingsIS[j]["Coordinate"]}\n')
             for j in signalsIS:
                 if i == signalsIS[j]["Node"]:
                     f.write(f'\tSignals -> {j}\n')
@@ -1176,13 +1177,13 @@ def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetection
 # Find signals for bufferStops
 def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
     step = 100
-    print(bufferStops)
+    #print(bufferStops)
     # Find every end of the network
     for node in nodes:
         # If the node is a bufferStop:
         if node in bufferStops:
             for i in range(len(bufferStops[node])):
-                print(bufferStops[node][i])
+                #print(bufferStops[node][i])
                 # Add circulation signal with the direction of the exit
                 if node in netPaths:
                     side = "Prev" if "Next" in netPaths[node] else "Next"
@@ -1192,7 +1193,7 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                 
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 
-                atTrack = "left" if bufferStops[node][i]["Direction"] == "normal" else "Right"
+                atTrack = "left" if bufferStops[node][i]["Direction"] == "normal" else "right"
                 direction = bufferStops[node][i]["Direction"]
                 
                 
@@ -1215,9 +1216,27 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
 # Find signals for level crossings
 def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
+    step = 200
+    print(levelCrossingsIS)
     # Find every level crossing on the network
+    for crossing in levelCrossingsIS:
+        node = levelCrossingsIS[crossing]["Net"] 
+        pos = levelCrossingsIS[crossing]["Position"]
         # Add an entrance signal and an exit signal
-
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "normal"
+        atTrack = "left"
+        position = [pos[0]-step,pos[1]]
+        signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        print(sig_number,signals[sig_number])
+        
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "reverse"
+        atTrack = "right"
+        position = [pos[0]+step/2,pos[1]]
+        signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        print(sig_number,signals[sig_number])
+        
     return signals
 
 # Find signals for platforms
@@ -1350,9 +1369,14 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
     # Adapting levelCrossings to be node friendly
     crossing_nodes = {}
+    
+    print(levelCrossingsIS)
+    for crossing in levelCrossingsIS:
+        if levelCrossingsIS[crossing]["Net"] not in crossing_nodes:
+            crossing_nodes[levelCrossingsIS[crossing]["Net"]] = {}
+        crossing_nodes[levelCrossingsIS[crossing]["Net"]] |= {"Id":crossing,"Position":levelCrossingsIS[crossing]["Position"],"Coordinate":levelCrossingsIS[crossing]["Coordinate"]}
 
-    #print(levelCrossings)
-    #for crossing in levelCrossings: # TODO   
+    print(crossing_nodes)  
 
     # Move around every node
     for node in nodes:
@@ -1398,7 +1422,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
         # If there is a LevelCrossing:
         if node in crossing_nodes:
             crossing_positions = crossing_nodes[node]["Position"]
-            print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Crossing"]}] @ {crossing_positions}')
+            print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Id"]}] @ {crossing_positions}')
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
@@ -1523,7 +1547,7 @@ def analyzing_object(object):
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
     
-    #print(bufferStops)
+    #print(levelCrossingsIS)
     infrastructure_file = "F:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
