@@ -293,14 +293,20 @@ def detect_operationalPoints(infrastructure):
     
     return operationalPoints
 
-def detect_platforms(infrastructure):
+def detect_platforms(infrastructure,visualization):
     platforms = {}
 
     if infrastructure.Platforms != None:
         for i in infrastructure.Platforms[0].Platform:
             if i.Id not in platforms.keys():
-                platforms[i.LinearLocation[0].AssociatedNetElement[0].NetElementRef] = {"Id":i.Id,"Side":i.LinearLocation[0].AssociatedNetElement[0].LinearCoordinateBegin.LateralSide}
+                platforms[i.Id] = {"Net":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef,"Direction":i.LinearLocation[0].ApplicationDirection,"Value":i.Length[0].Value}
     
+    if visualization.Visualization[0].SpotElementProjection != None:
+        for i in visualization.Visualization[0].SpotElementProjection:
+            if "plf" in i.RefersToElement:
+                platforms[i.RefersToElement] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
+                
+    print(platforms)
     return platforms
 
 def detect_signalsIS(infrastructure):
@@ -391,7 +397,7 @@ def analyzing_infrastructure(infrastructure,visualization):
     operationalPoints = detect_operationalPoints(infrastructure)    # TODO FOR MESO
     
     # platforms
-    platforms = detect_platforms(infrastructure)
+    platforms = detect_platforms(infrastructure,visualization)
     
     # signalsIS
     signalsIS = detect_signalsIS(infrastructure)
@@ -1217,7 +1223,7 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 # Find signals for level crossings
 def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
     step = 200
-    print(levelCrossingsIS)
+    #print(levelCrossingsIS)
     # Find every level crossing on the network
     for crossing in levelCrossingsIS:
         node = levelCrossingsIS[crossing]["Net"] 
@@ -1228,14 +1234,14 @@ def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
         atTrack = "left"
         position = [pos[0]-step,pos[1]]
         signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
-        print(sig_number,signals[sig_number])
+        #print(sig_number,signals[sig_number])
         
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
         position = [pos[0]+step/2,pos[1]]
         signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
-        print(sig_number,signals[sig_number])
+        #print(sig_number,signals[sig_number])
         
     return signals
 
@@ -1370,13 +1376,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     # Adapting levelCrossings to be node friendly
     crossing_nodes = {}
     
-    print(levelCrossingsIS)
     for crossing in levelCrossingsIS:
         if levelCrossingsIS[crossing]["Net"] not in crossing_nodes:
             crossing_nodes[levelCrossingsIS[crossing]["Net"]] = {}
         crossing_nodes[levelCrossingsIS[crossing]["Net"]] |= {"Id":crossing,"Position":levelCrossingsIS[crossing]["Position"],"Coordinate":levelCrossingsIS[crossing]["Coordinate"]}
-
-    print(crossing_nodes)  
 
     # Move around every node
     for node in nodes:
@@ -1384,7 +1387,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
         
         # Check if there is a RailJoint, Platform, LevelCrossing or curve.
         # If there is a RailJoint:
-        if node in railJoints:
+        if node in railJoints and 1>2:
             railJoint_position = railJoints[node]["Position"]
             print(f"  {node} has a RailJoint[{railJoints[node]['Joint']}] @ {railJoint_position}")
             if node not in signal_placement:
@@ -1399,10 +1402,12 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             prev_place.append([round(railJoint_position[0]+step,1),round(railJoint_position[1],1)])
 
             # Upload both positions to the node
-            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}         
+            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+            signal_placement[node]["Next"].append(next_place)
+            signal_placement[node]["Prev"].append(prev_place)
         
         # If there is a Platform:
-        if node in platforms_node:
+        if node in platforms_node and 1>2:
             platform_position = platforms_node[node]["Position"]
             print(f'  {node} has a Platform[{platforms_node[node]["Platform"]}] @ {platform_position}')
             if node not in signal_placement:
@@ -1417,7 +1422,9 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             prev_place.append([round(platform_position[0]+step,1),round(platform_position[1],1)])
 
             # Upload both positions to the node
-            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+            #signal_placement[node]["Next"].append(next_place)
+            #signal_placement[node]["Prev"].append(prev_place)
 
         # If there is a LevelCrossing:
         if node in crossing_nodes:
@@ -1428,17 +1435,19 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
             # next_position = LevelCrossing_position - one step    
             next_place = signal_placement[node]["Next"]
-            next_place.append([round(crossing_positions[0]-step,1),round(crossing_positions[1],1)])
-
+            next_place = [round(crossing_positions[0]-step,1),round(crossing_positions[1],1)]
+            
             # prev_position = LevelCrossing_position + one step
             prev_place = signal_placement[node]["Prev"]
-            prev_place.append([round(crossing_positions[0]+step,1),round(crossing_positions[1],1)])
+            prev_place = [round(crossing_positions[0]+step,1),round(crossing_positions[1],1)]
 
             # Upload both positions to the node
-            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
-
+            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+            signal_placement[node]["Next"] += next_place
+            signal_placement[node]["Prev"] += prev_place    # TODO CHANGE THIS IN THE OTHERS
+            
         # If there is a curve:
-        if nodes[node]["Lines"] > 1:
+        if nodes[node]["Lines"] > 1 and 1>2:
             all_points = nodes[node]["All"]
             curve_positions  = all_points[1:-1]
             print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
@@ -1471,10 +1480,12 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     prev_place.append([round(curve_positions[curve][0]+step,1),round(curve_positions[curve][1],1)])
 
             # Upload both positions to the node
-            signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
+            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+            signal_placement[node]["Next"].append(next_place)
+            signal_placement[node]["Prev"].append(prev_place)
 
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
-        if node not in signal_placement:
+        if node not in signal_placement and 1>2:
             if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
                 
                 if node not in signal_placement:
@@ -1495,8 +1506,12 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 prev_place.append([round(x_middle_point+step,1),round(y_coordinate,1)])
                 
                 # Upload both positions to the node
-                signal_placement[node] |= {"Next":next_place,"Prev":prev_place}
-
+                #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                signal_placement[node]["Next"].append(next_place)
+                signal_placement[node]["Prev"].append(prev_place)
+    
+    print(signal_placement)
+    return signal_placement
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
