@@ -1165,7 +1165,7 @@ def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetection
 
     # Find signals for level crossings
     print(" Creating signals for level crossings")
-    signals = find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals)
+    signals = find_signals_crossings(safe_point_file,nodes,netPaths,levelCrossingsIS,signals)
 
     # Find signals for platforms
     print(" Creating signals for platforms")
@@ -1221,7 +1221,7 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     return signals
 
 # Find signals for level crossings
-def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
+def find_signals_crossings(safe_point_file,nodes,netPaths,levelCrossingsIS,signals):
     step = 200
     #print(levelCrossingsIS)
     # Find every level crossing on the network
@@ -1247,8 +1247,26 @@ def find_signals_crossings(nodes,netPaths,levelCrossingsIS,signals):
 
 # Find signals for platforms
 def find_signals_platforms(nodes,netPaths,platforms,signals):
+    step = 200
     # Find every platform on the network
+    for platform in platforms:
+        node = platforms[platform]["Net"] 
+        pos = platforms[platform]["Position"]
+        size = int(platforms[platform]["Value"])
         # Add an entrance signal and an exit signal
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "normal"
+        atTrack = "left"
+        position = [pos[0]-size/2-step/2,pos[1]]    # TODO FIND THE SAFEPOINTS
+        signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        #print(sig_number,signals[sig_number])
+        
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "reverse"
+        atTrack = "right"
+        position = [pos[0]+size/2+step/2,pos[1]]
+        signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        #print(sig_number,signals[sig_number])
 
     return signals
 
@@ -1370,14 +1388,11 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     # Adapting platforms to be node friendly
     platforms_node = {}
 
-    print(platforms)
     for platform in platforms:
         node = platforms[platform]["Net"]
         if node not in platforms_node:
             platforms_node[node] = {}
         platforms_node[node] |= {"Platform":platform,"Value":platforms[platform]["Value"],"Direction":platforms[platform]["Direction"],"Position":platforms[platform]["Position"]}
-
-    print(platforms_node)
     
     # Adapting levelCrossings to be node friendly
     crossing_nodes = {}
@@ -1514,7 +1529,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 signal_placement[node]["Next"].append(next_place)
                 signal_placement[node]["Prev"].append(prev_place)
     
-    print(signal_placement)
+    #print(signal_placement)
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
