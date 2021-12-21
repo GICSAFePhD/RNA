@@ -1152,7 +1152,7 @@ def find_nodes(start_node,netPaths,semaphores):
     return end_nodes
 
 # Find signals for every node in the network
-def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signals = {}
 
     # Find signals for bufferStops
@@ -1165,11 +1165,11 @@ def find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetection
 
     # Find signals for level crossings
     print(" Creating signals for level crossings")
-    signals = find_signals_crossings(safe_point_file,nodes,netPaths,levelCrossingsIS,signals)
+    signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
 
     # Find signals for platforms
     print(" Creating signals for platforms")
-    signals = find_signals_platforms(nodes,netPaths,platforms,signals)
+    signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals)
 
     # Reduce redundant signals
     print(" Reducing redundant signals")
@@ -1221,7 +1221,7 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     return signals
 
 # Find signals for level crossings
-def find_signals_crossings(safe_point_file,nodes,netPaths,levelCrossingsIS,signals):
+def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals):
     step = 200
     #print(levelCrossingsIS)
     # Find every level crossing on the network
@@ -1232,21 +1232,27 @@ def find_signals_crossings(safe_point_file,nodes,netPaths,levelCrossingsIS,signa
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = [pos[0]-step,pos[1]]
+        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        #x = [pos[0]-step,pos[1]]
+        print(f'{node} | {pos} >>{signal_placement[node]["Next"]}<< {position}')
+        
         signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
         #print(sig_number,signals[sig_number])
         
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = [pos[0]+step/2,pos[1]]
+        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        #x = [pos[0]+step/2,pos[1]]
+        print(f'{node} | {pos} >>{signal_placement[node]["Prev"]}<< {position}')
+        
         signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
         #print(sig_number,signals[sig_number])
         
     return signals
 
 # Find signals for platforms
-def find_signals_platforms(nodes,netPaths,platforms,signals):
+def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
     step = 200
     # Find every platform on the network
     for platform in platforms:
@@ -1257,18 +1263,40 @@ def find_signals_platforms(nodes,netPaths,platforms,signals):
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = [pos[0]-size/2-step/2,pos[1]]    # TODO FIND THE SAFEPOINTS
+        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        #x = [pos[0]-size/2-step/2,pos[1]]
+        #print(f'{node} | {pos} >>{signal_placement[node]["Next"]}<< {position}')
+        
         signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
         #print(sig_number,signals[sig_number])
         
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = [pos[0]+size/2+step/2,pos[1]]
+        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        #x = [pos[0]+size/2+step/2,pos[1]]
+        #print(f'{node} | {pos} >>{signal_placement[node]["Next"]}<< {position}')
+        
         signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
         #print(sig_number,signals[sig_number])
 
     return signals
+
+# Find closest point between options
+def closest_safe_point(safe_points,position):
+    closest = []
+    distance = []
+    
+    print("$$",safe_points,position)
+    
+    for safe_point in safe_points:
+        distance.append(abs(position[0]-safe_point[0]))
+    
+    index = distance.index(min(distance))
+    
+    closest = safe_points[index]
+    print(closest)
+    return closest
 
 # Reduce redundant signals
 def reduce_signals(signals):
@@ -1371,14 +1399,13 @@ def export_signal(file,signals,object):
 
 def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signal_placement = {}
-    step = 100
+    step = 200
     # print(nodes)    # Nodes' Positions
     # print(netPaths) # Nodes' connections
     # print(switchesIS) # Switches'
 
     # Adapting railJoints to be node friendly
     railJoints = {}
-
     for element in trainDetectionElements:
         if "RailJoint" in trainDetectionElements[element]["Type"]:
             if trainDetectionElements[element]["Node"] not in railJoints:
@@ -1387,7 +1414,6 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
     # Adapting platforms to be node friendly
     platforms_node = {}
-
     for platform in platforms:
         node = platforms[platform]["Net"]
         if node not in platforms_node:
@@ -1396,7 +1422,6 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     
     # Adapting levelCrossings to be node friendly
     crossing_nodes = {}
-    
     for crossing in levelCrossingsIS:
         if levelCrossingsIS[crossing]["Net"] not in crossing_nodes:
             crossing_nodes[levelCrossingsIS[crossing]["Net"]] = {}
@@ -1458,7 +1483,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             
             # prev_position = LevelCrossing_position + one step
             prev_place = signal_placement[node]["Prev"]
-            prev_place = [round(crossing_positions[0]+step,1),round(crossing_positions[1],1)]
+            prev_place = [round(crossing_positions[0]+step/2,1),round(crossing_positions[1],1)]
 
             # Upload both positions to the node
             #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
@@ -1591,7 +1616,7 @@ def analyzing_object(object):
     print(f' Signal (possible) places:{signal_placement}')
 
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
-    signals = find_signals(safe_point_file,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
