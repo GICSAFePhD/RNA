@@ -1162,6 +1162,12 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     if printed_signals:
         print(f' Creating signals for bufferstops:{printed_signals}')
     
+    # Find signals for railJoints
+    signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals)
+    if [*signals] != printed_signals:
+        print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
+    printed_signals = [*signals]
+    
     # Find signals for switches
     signals = find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
     if [*signals] != printed_signals:
@@ -1227,6 +1233,36 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
 # Find signals for switches
 def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
 
+    return signals
+
+# Find signals for railJoints
+def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals):
+    distance = 150
+    # Find every level crossing on the network
+    for joint in trainDetectionElements:
+        node = trainDetectionElements[joint]["Node"] 
+        pos = trainDetectionElements[joint]["Position"]
+        # Add an entrance signal and an exit signal
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "normal"
+        atTrack = "left"
+        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        
+        # If the safe position is far away, avoid the signal
+        #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
+        if (abs(position[0]-pos[0]) < distance):
+            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        direction = "reverse"
+        atTrack = "right"
+        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        
+        # If the safe position is far away, avoid the signal
+        #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
+        if (abs(position[0]-pos[0]) < distance):
+            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        
     return signals
 
 # Find signals for level crossings
@@ -1442,11 +1478,11 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
             # next_position = RailJoint_position - one step
             next_place = signal_placement[node]["Next"]
-            next_place = [round(railJoint_position[0]-step,1),round(railJoint_position[1],1)]
+            next_place = [round(railJoint_position[0]-step/2,1),round(railJoint_position[1],1)]
 
             # prev_position = RailJoint_position + one step
             prev_place = signal_placement[node]["Prev"]
-            prev_place = [round(railJoint_position[0]+step,1),round(railJoint_position[1],1)]
+            prev_place = [round(railJoint_position[0]+step/2,1),round(railJoint_position[1],1)]
 
             # Upload both positions to the node
             #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
