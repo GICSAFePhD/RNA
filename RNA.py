@@ -1155,39 +1155,34 @@ def find_nodes(start_node,netPaths,semaphores):
 def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signals = {}
     printed_signals = []
+    
     # Find signals for bufferStops
-    print(" Creating signals for bufferstops")
     signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
     printed_signals = [*signals]
     if printed_signals:
-        print(printed_signals)
+        print(f' Creating signals for bufferstops:{printed_signals}')
     
     # Find signals for switches
-    print(" Creating signals for switches")
     signals = find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
     if [*signals] != printed_signals:
-        print([item for item in [*signals] if item not in printed_signals])
+        print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
     
     # Find signals for level crossings
-    print(" Creating signals for level crossings")
     signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
-    print([item for item in [*signals] if item not in printed_signals])
+    if [*signals] != printed_signals:
+        print(f' Creating signals for crossings:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
     
     # Find signals for platforms
-    print(" Creating signals for platforms")
     signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals)
     if [*signals] != printed_signals:
-        print([item for item in [*signals] if item not in printed_signals])
+        print(f' Creating signals for platforms:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
     
     # Reduce redundant signals
     print(" Reducing redundant signals")
     signals = reduce_signals(signals)
-    if [*signals] != printed_signals:
-        print([item for item in [*signals] if item not in printed_signals])
-    printed_signals = [*signals]
     
     for sig in signals:
         intrinsic_coordinate = calculate_intrinsic_coordinate([signals[sig]["Position"][0],-signals[sig]["Position"][1]],nodes[signals[sig]["From"]]["All"])
@@ -1236,7 +1231,7 @@ def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
 # Find signals for level crossings
 def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals):
-    distance = 500
+    distance = 250
     # Find every level crossing on the network
     for crossing in levelCrossingsIS:
         node = levelCrossingsIS[crossing]["Net"] 
@@ -1499,7 +1494,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             signal_placement[node]["Prev"].append(prev_place)
         
         # If there is a curve:
-        if nodes[node]["Lines"] > 1 and 1>2:
+        if nodes[node]["Lines"] > 1:
             all_points = nodes[node]["All"]
             curve_positions  = all_points[1:-1]
             print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
@@ -1537,7 +1532,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             signal_placement[node]["Prev"].append(prev_place)
 
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
-        if node not in signal_placement and 1>2:
+        if node not in signal_placement:
             if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
                 
                 if node not in signal_placement:
