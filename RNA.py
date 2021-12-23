@@ -1168,12 +1168,6 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
         print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
     
-    # Find signals for switches
-    signals = find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
-    if [*signals] != printed_signals:
-        print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
-    printed_signals = [*signals]
-    
     # Find signals for level crossings
     signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
     if [*signals] != printed_signals:
@@ -1186,10 +1180,17 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
         print(f' Creating signals for platforms:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
     
+    # Find signals for switches
+    signals = find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
+    if [*signals] != printed_signals:
+        print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
+    printed_signals = [*signals]
+    
     # Reduce redundant signals
     print(" Reducing redundant signals")
     signals = reduce_signals(signals)
     
+    #print(signals)
     for sig in signals:
         intrinsic_coordinate = calculate_intrinsic_coordinate([signals[sig]["Position"][0],-signals[sig]["Position"][1]],nodes[signals[sig]["From"]]["All"])
         signals[sig]["Coordinate"] = intrinsic_coordinate
@@ -1231,8 +1232,91 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
     return signals
 
 # Find signals for switches
-def find_signals_switches(nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
+def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
+    
+    nodeRole = {}
+    nodeSwitch = {}
+    # Find the use of each node
+    for switch in switchesIS:
+        sw_info = switchesIS[switch]
+        
+        [begin_right, end_right, name] = identify_relations(sw_info["RightBranch"])
+        [begin_left, end_left, name] = identify_relations(sw_info["LeftBranch"])
+        
+        # Find the start node
+        start_node = sw_info["Node"]
+        
+        # Find continue and branch node node
+        [continue_node,branch_node] = [end_right if start_node == begin_right else begin_right,end_left if start_node == begin_left else end_left]
+        if (sw_info["ContinueCourse"] == "right"): 
+            # Continue course is right and branch course is left -> It was solved a line before
+            pass
+        else:
+            # Continue course is left and branch course is right -> swap continue and branch
+            branch_node,continue_node = continue_node,branch_node
+        
+        print(f'     {switch}:{start_node}:{continue_node}:{branch_node}|{sw_info["RightBranch"]}|{sw_info["LeftBranch"]}')
+        
+        if start_node not in nodeRole:
+            nodeRole[start_node] = {}
+        if continue_node not in nodeRole:
+            nodeRole[continue_node] = {}
+        if branch_node not in nodeRole:
+            nodeRole[branch_node] = {}
+        
+        nodeRole[start_node] |= {"Start":switch}
+        nodeRole[continue_node] |= {"Continue":switch}
+        nodeRole[branch_node] |= {"Branch":switch}
+        
+        nodeSwitch[switch] = {"Start":start_node,"Continue":continue_node,"Branch":branch_node}
+    
+    print(nodeRole)
+    print(nodeSwitch)
 
+    # Find every switch in the network
+    for switch in switchesIS:
+        
+        start_node = nodeSwitch[switch]["Start"]
+        continue_node = nodeSwitch[switch]["Continue"]
+        branch_node = nodeSwitch[switch]["Branch"]
+        
+        continue_atTrack = "right" if continue_node in netPaths[start_node]["Next"] else "left"
+        branch_atTrack = "right" if branch_node in netPaths[start_node]["Next"] else "left"
+
+        print(f'  {switch} : [{start_node}|{continue_node}-{continue_atTrack}|{branch_node}-{branch_atTrack}]')
+        
+        # For continue course
+        # If the continue node is not the branch node of other switch
+        if nodeRole[continue_node]["Branch"] == None:
+            # Add circulation signal aiming to the switch
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            direction = "reverse"
+            atTrack = "right"
+            pos = sw_info["Position"]
+            position = closest_safe_point(signal_placement[continue_node]["Prev"],pos)
+        # If the continue node IS the branch node of othet switch
+        else:
+            # Move through that switches until the start node is reached
+            # TODO CHANGE ALL THIS
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            direction = "reverse"
+            atTrack = "right"
+            pos = sw_info["Position"]
+            position = closest_safe_point(signal_placement[continue_node]["Prev"],pos)
+
+        
+        
+        
+        signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            
+        # For branch course
+            # if THIS node is not a start node for other switch:
+                # Add manouver signal aiming to the switch
+            # else:
+                # Move the manouver signal following the flow of that switch
+        
+        # For start course
+    
     return signals
 
 # Find signals for railJoints
@@ -1542,9 +1626,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     orientation.append("-")
                 else:
                     orientation.append("/")
-            
-            #print(node,orientation)
-            
+
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
@@ -1554,7 +1636,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             for curve in range(len(curve_positions)):
                 if orientation[curve+1] == "/":                        
                     next_place = [round(curve_positions[curve][0]-step/2,1),round(curve_positions[curve][1],1)]
-
+            
             # prev_position = curve_position(next node, close to the curve) + one step
             prev_place = signal_placement[node]["Prev"]
 
@@ -1563,10 +1645,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     prev_place = [round(curve_positions[curve][0]+step/2,1),round(curve_positions[curve][1],1)]
 
             # Upload both positions to the node
-            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            signal_placement[node]["Next"].append(next_place)
-            signal_placement[node]["Prev"].append(prev_place)
-
+            if next_place:
+                signal_placement[node]["Next"].append(next_place)
+            if prev_place:
+                signal_placement[node]["Prev"].append(prev_place)
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
         if node not in signal_placement:
             if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
@@ -1593,16 +1675,15 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 signal_placement[node]["Next"].append(next_place)
                 signal_placement[node]["Prev"].append(prev_place)
     
-    #print(signal_placement)
+    # Simplify closest signal placements
+    signal_simplification_by_proximity(signal_placement)
+    
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
             del signal_placement[i]["Prev"]
         if signal_placement[i]["Next"] == []:
-            del signal_placement[i]["Next"]
-    
-    # Simplify closest signal placements
-    signal_simplification_by_proximity(signal_placement)
+            del signal_placement[i]["Next"]    
     
     return signal_placement
 
@@ -1632,7 +1713,6 @@ def signal_simplification_by_proximity(signal_placement):
         signal_placement[node]["Prev"] = n_p_prev
     
     return signal_placement
-
 
 # Order que "All" attribute for nodes:
 def order_nodes_points(nodes):
@@ -1668,23 +1748,18 @@ def analyzing_object(object):
     print(" Analyzing graph")
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
     
-    #print(netPaths)
-    
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
     
-    #print(levelCrossingsIS)
     infrastructure_file = "F:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
     print(" Detecting Danger --> Signalling.RNA")
-    
     signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
     print(f' Signal (possible) places:{signal_placement}')
-
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
