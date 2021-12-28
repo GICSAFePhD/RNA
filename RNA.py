@@ -1270,9 +1270,9 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         
         nodeSwitch[switch] = {"Start":start_node,"Continue":continue_node,"Branch":branch_node}
     
-    print(netPaths)
-    print(nodeRole)
-    print(nodeSwitch)
+    #print(netPaths)
+    #print(nodeRole)
+    #print(nodeSwitch)
 
     # Find every switch in the network
     for switch in switchesIS:
@@ -1284,10 +1284,12 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         print(f'  {switch} : [{start_node}|{continue_node}|{branch_node}]')
         
         # For continue course
+        signal_type = "Circulation" if nodes[continue_node]["Lines"] == 1 else "Manouver"
         next_node = continue_node
         while "Branch" in nodeRole[next_node] and nodeRole[next_node]["Branch"] != None:
             next_switch = nodeRole[next_node]["Branch"]
             next_node = nodeSwitch[next_switch]["Start"]
+            signal_type = "Manouver"
             print(f'    {switch} -> {next_switch} @ {next_node}')
         continue_node = next_node
         
@@ -1297,16 +1299,20 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         atTrack = "right"
         pos = sw_info["Position"]
         side = "Next" if ("Next" in netPaths[continue_node] and start_node in netPaths[continue_node]["Next"]) else "Prev"
-        position = closest_safe_point(signal_placement[continue_node][side],pos)
         
-        signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+        #position = closest_safe_point(signal_placement[continue_node][side],pos)
+        position = [signal_placement[continue_node][side][0][0],-signal_placement[continue_node][side][0][1]]
         
+        signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position}
+        print(f'     Continue - {sig_number}:{signals[sig_number]}')
+
+        continue
+    
         # For branch course
         next_node = branch_node
-        while "Start" in nodeRole[next_node] and nodeRole[next_node]["Start"] != None:
-            next_switch = nodeRole[next_node]["Start"]
+        while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
+            next_switch = switch
             next_node = nodeSwitch[next_switch]["Start"]
-            print("ACA")
             print(f'    {switch} -> {next_switch} @ {next_node}')
         branch_node = next_node
         
@@ -1320,22 +1326,35 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         position = [signal_placement[branch_node][side][0][0],-signal_placement[branch_node][side][0][1]]
         
         signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
-        #print(signals[sig_number])
+        print(f'     Branch - {sig_number}:{signals[sig_number]}')
         
         # For start course
-        
         # Circulation
-        sig_number = "sig"+str(len(signals)+1).zfill(2)
         
-        direction = "normal" if "Next" in netPaths[start_node] else "reverse"
-        atTrack = "left" if "Next" in netPaths[start_node] else "right"
-        pos = sw_info["Position"]
-        side = "Next" if "Next" in netPaths[start_node] else "Prev"
-        position = closest_safe_point(signal_placement[start_node][side],pos)
-        
-        signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
-        
+        # If start is also a branch, don't add signal
+        if start_node in signal_placement:
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            
+            direction = "normal" if "Next" in netPaths[start_node] else "reverse"
+            atTrack = "left" if "Next" in netPaths[start_node] else "right"
+            pos = sw_info["Position"]
+            side = "Next" if "Next" in netPaths[start_node] else "Prev"
+            position = closest_safe_point(signal_placement[start_node][side],pos)
+            
+            signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
+            
+
         # Manouver
+        
+        # For branch course
+        next_node = start_node
+        while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
+            next_switch = nodeRole[next_node]["Branch"]
+            next_node = nodeSwitch[next_switch]["Start"]
+            print(f'    {switch} -> {next_switch} @ {next_node}')
+        start_node = next_node
+        
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         
         direction = "normal" if "Next" in netPaths[start_node] else "reverse"
@@ -1345,8 +1364,7 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         position = closest_safe_point(signal_placement[start_node][side],pos)
         
         signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
-        
-        
+        print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
         
     
     return signals
