@@ -1300,19 +1300,16 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         pos = sw_info["Position"]
         side = "Next" if ("Next" in netPaths[continue_node] and start_node in netPaths[continue_node]["Next"]) else "Prev"
         
-        #position = closest_safe_point(signal_placement[continue_node][side],pos)
-        position = [signal_placement[continue_node][side][0][0],-signal_placement[continue_node][side][0][1]]
-        
+        position = closest_safe_point(signal_placement[continue_node][side],pos)
+
         signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position}
         print(f'     Continue - {sig_number}:{signals[sig_number]}')
 
-        continue
-    
         # For branch course
         next_node = branch_node
         while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
-            next_switch = switch
-            next_node = nodeSwitch[next_switch]["Start"]
+            next_switch = nodeRole[next_node]["Start"]
+            next_node = nodeSwitch[next_switch]["Branch"]
             print(f'    {switch} -> {next_switch} @ {next_node}')
         branch_node = next_node
         
@@ -1327,6 +1324,8 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         
         signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
         print(f'     Branch - {sig_number}:{signals[sig_number]}')
+        
+        continue
         
         # For start course
         # Circulation
@@ -1472,7 +1471,7 @@ def closest_safe_point(safe_points,position):
     
     closest = safe_points[index]
     #print(closest)
-    return closest
+    return [closest[0],-closest[1]]
 
 # Reduce redundant signals
 def reduce_signals(signals):
