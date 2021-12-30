@@ -1151,11 +1151,78 @@ def find_nodes(start_node,netPaths,semaphores):
     
     return end_nodes
 
+# Find depth of a branch
+def branch_depth(nodes,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms):
+    
+    #print(nodes)
+    #print(netPaths)
+    #print(nodeRole)
+    #print(nodeSwitch)
+    
+    for node in nodeRole:
+        depth = 0
+        if "Start" in nodeRole[node] and "Branch" not in nodeRole[node]:
+            pivot_node = node
+            
+            while "Start" in nodeRole[pivot_node]:
+                next_switch = nodeRole[pivot_node]["Start"]
+                pivot_node = nodeSwitch[next_switch]["Branch"]
+                if "Continue" not in nodeRole[pivot_node]:
+                    depth += 1
+        nodes[node] |= {"Depth":depth}
+
+# Find the use of each node
+def find_node_roles(switchesIS):
+    nodeRole = {}
+    nodeSwitch = {}
+    
+    # Find the use of each node
+    for switch in switchesIS:
+        sw_info = switchesIS[switch]
+        
+        [begin_right, end_right, name] = identify_relations(sw_info["RightBranch"])
+        [begin_left, end_left, name] = identify_relations(sw_info["LeftBranch"])
+        
+        # Find the start node
+        start_node = sw_info["Node"]
+        
+        # Find continue and branch node node
+        [continue_node,branch_node] = [end_right if start_node == begin_right else begin_right,end_left if start_node == begin_left else end_left]
+        if (sw_info["ContinueCourse"] == "right"): 
+            # Continue course is right and branch course is left -> It was solved a line before
+            pass
+        else:
+            # Continue course is left and branch course is right -> swap continue and branch
+            branch_node,continue_node = continue_node,branch_node
+        
+        print(f'     {switch}:{start_node}:{continue_node}:{branch_node}|{sw_info["RightBranch"]}|{sw_info["LeftBranch"]}')
+        
+        if start_node not in nodeRole:
+            nodeRole[start_node] = {}
+        if continue_node not in nodeRole:
+            nodeRole[continue_node] = {}
+        if branch_node not in nodeRole:
+            nodeRole[branch_node] = {}
+        
+        nodeRole[start_node] |= {"Start":switch}
+        nodeRole[continue_node] |= {"Continue":switch}
+        nodeRole[branch_node] |= {"Branch":switch}
+        
+        nodeSwitch[switch] = {"Start":start_node,"Continue":continue_node,"Branch":branch_node}
+    
+    return nodeRole,nodeSwitch 
+
 # Find signals for every node in the network
 def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
     signals = {}
     printed_signals = []
+
+    # Find the use of each node
+    nodeRole,nodeSwitch = find_node_roles(switchesIS)
     
+    # Finde depth of branches
+    branch_depth(nodes,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms)
+
     # Find signals for bufferStops
     signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
     printed_signals = [*signals]
@@ -1181,7 +1248,7 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     printed_signals = [*signals]
     
     # Find signals for switches
-    signals = find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
+    signals = find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
     if [*signals] != printed_signals:
         print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
     printed_signals = [*signals]
@@ -1232,50 +1299,15 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
     return signals
 
 # Find signals for switches
-def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
-    
-    nodeRole = {}
-    nodeSwitch = {}
-    # Find the use of each node
-    for switch in switchesIS:
-        sw_info = switchesIS[switch]
-        
-        [begin_right, end_right, name] = identify_relations(sw_info["RightBranch"])
-        [begin_left, end_left, name] = identify_relations(sw_info["LeftBranch"])
-        
-        # Find the start node
-        start_node = sw_info["Node"]
-        
-        # Find continue and branch node node
-        [continue_node,branch_node] = [end_right if start_node == begin_right else begin_right,end_left if start_node == begin_left else end_left]
-        if (sw_info["ContinueCourse"] == "right"): 
-            # Continue course is right and branch course is left -> It was solved a line before
-            pass
-        else:
-            # Continue course is left and branch course is right -> swap continue and branch
-            branch_node,continue_node = continue_node,branch_node
-        
-        print(f'     {switch}:{start_node}:{continue_node}:{branch_node}|{sw_info["RightBranch"]}|{sw_info["LeftBranch"]}')
-        
-        if start_node not in nodeRole:
-            nodeRole[start_node] = {}
-        if continue_node not in nodeRole:
-            nodeRole[continue_node] = {}
-        if branch_node not in nodeRole:
-            nodeRole[branch_node] = {}
-        
-        nodeRole[start_node] |= {"Start":switch}
-        nodeRole[continue_node] |= {"Continue":switch}
-        nodeRole[branch_node] |= {"Branch":switch}
-        
-        nodeSwitch[switch] = {"Start":start_node,"Continue":continue_node,"Branch":branch_node}
-    
+def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
+
     #print(netPaths)
     #print(nodeRole)
     #print(nodeSwitch)
 
     # Find every switch in the network
     for switch in switchesIS:
+        sw_info = switchesIS[switch]
         
         start_node = nodeSwitch[switch]["Start"]
         continue_node = nodeSwitch[switch]["Continue"]
@@ -1346,7 +1378,7 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         # Manouver
 
         # TODO CHECK DEPTH! create nodeDepth and fill it with the depth of each node. ne1 = 2
-        depth = branch_depth(start_node)
+        depth = nodes[start_node]["Depth"]
         
         while depth > 0:
             sig_number = "sig"+str(len(signals)+1).zfill(2)
@@ -1363,15 +1395,6 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         
 
     return signals
-
-# Find depth of a branch
-def branch_depth(node):
-    
-    depth = 0
-    if node == "ne1":
-        depth = 2
-    
-    return depth
 
 # Find signals for railJoints
 def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals):
@@ -1814,7 +1837,7 @@ def analyzing_object(object):
     safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
-    print(f' Signal (possible) places:{signal_placement}')
+    #print(f' Signal (possible) places:{signal_placement}')
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
