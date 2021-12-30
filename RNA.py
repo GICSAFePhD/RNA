@@ -1305,27 +1305,27 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
         signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position}
         print(f'     Continue - {sig_number}:{signals[sig_number]}')
 
+        # CANCELED! NO more signal inheritance across ranches
         # For branch course
-        next_node = branch_node
-        while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
-            next_switch = nodeRole[next_node]["Start"]
-            next_node = nodeSwitch[next_switch]["Branch"]
-            print(f'    {switch} -> {next_switch} @ {next_node}')
-        branch_node = next_node
+        #next_node = branch_node
+        #while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
+        #    next_switch = nodeRole[next_node]["Start"]
+        #    next_node = nodeSwitch[next_switch]["Continue"]
+        #    print(f'    {switch} -> {next_switch} @ {next_node}')
+        #branch_node = next_node
         
-        sig_number = "sig"+str(len(signals)+1).zfill(2)
-        
-        direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse"
-        atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
-        pos = sw_info["Position"]
-        side = "Next" if ("Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"]) else "Prev"
-        
-        position = [signal_placement[branch_node][side][0][0],-signal_placement[branch_node][side][0][1]]
-        
-        signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
-        print(f'     Branch - {sig_number}:{signals[sig_number]}')
-        
-        continue
+        if "Start" not in nodeRole[branch_node]:
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            
+            direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse"
+            atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
+            pos = sw_info["Position"]
+            side = "Next" if ("Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"]) else "Prev"
+            
+            position = [signal_placement[branch_node][side][0][0],-signal_placement[branch_node][side][0][1]]
+            
+            signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
+            print(f'     Branch - {sig_number}:{signals[sig_number]}')
         
         # For start course
         # Circulation
@@ -1343,30 +1343,35 @@ def find_signals_switches(signal_placement,nodes,netPaths,switchesIS,tracks,trai
             signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
             print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
             
-
         # Manouver
+
+        # TODO CHECK DEPTH! create nodeDepth and fill it with the depth of each node. ne1 = 2
+        depth = branch_depth(start_node)
         
-        # For branch course
-        next_node = start_node
-        while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
-            next_switch = nodeRole[next_node]["Branch"]
-            next_node = nodeSwitch[next_switch]["Start"]
-            print(f'    {switch} -> {next_switch} @ {next_node}')
-        start_node = next_node
+        while depth > 0:
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
         
-        sig_number = "sig"+str(len(signals)+1).zfill(2)
+            direction = "normal" if "Next" in netPaths[start_node] else "reverse"
+            atTrack = "left" if "Next" in netPaths[start_node] else "right"
+            pos = sw_info["Position"]
+            side = "Next" if "Next" in netPaths[start_node] else "Prev"
+            position = closest_safe_point(signal_placement[start_node][side],pos)
+            
+            signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
+            print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
+            depth -= 1
         
-        direction = "normal" if "Next" in netPaths[start_node] else "reverse"
-        atTrack = "left" if "Next" in netPaths[start_node] else "right"
-        pos = sw_info["Position"]
-        side = "Next" if "Next" in netPaths[start_node] else "Prev"
-        position = closest_safe_point(signal_placement[start_node][side],pos)
-        
-        signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
-        print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
-        
-    
+
     return signals
+
+# Find depth of a branch
+def branch_depth(node):
+    
+    depth = 0
+    if node == "ne1":
+        depth = 2
+    
+    return depth
 
 # Find signals for railJoints
 def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals):
