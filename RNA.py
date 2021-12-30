@@ -1337,7 +1337,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position}
         print(f'     Continue - {sig_number}:{signals[sig_number]}')
 
-        # CANCELED! NO more signal inheritance across ranches
+        # CANCELED! NO more signal inheritance across branches
         # For branch course
         #next_node = branch_node
         #while "Start" in nodeRole[next_node] and "Branch" in nodeRole[next_node]:
@@ -1346,6 +1346,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         #    print(f'    {switch} -> {next_switch} @ {next_node}')
         #branch_node = next_node
         
+        # For branch course
         if "Start" not in nodeRole[branch_node]:
             sig_number = "sig"+str(len(signals)+1).zfill(2)
             
@@ -1376,8 +1377,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
             
         # Manouver
-
-        # TODO CHECK DEPTH! create nodeDepth and fill it with the depth of each node. ne1 = 2
         depth = nodes[start_node]["Depth"]
         
         while depth > 0:
@@ -1392,7 +1391,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
             print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
             depth -= 1
-        
 
     return signals
 
@@ -1815,6 +1813,15 @@ def export_placement(file,nodes,signal_placement):
                 if "Prev" in signal_placement[sig]:
                     f.write(f'  Prev: {signal_placement[sig]["Prev"]}\n')
         f.close()
+
+def move_signals(signals):
+    step = 90
+    for signal_a in signals:
+        for signal_b in signals:
+            if signal_a != signal_b and signals[signal_a]["Position"] == signals[signal_b]["Position"]:
+                print(signal_a,signal_b)
+                signals[signal_b]["Position"] = [signals[signal_b]["Position"][0]+step,signals[signal_b]["Position"][1]]
+
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1840,6 +1847,7 @@ def analyzing_object(object):
     #print(f' Signal (possible) places:{signal_placement}')
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+    move_signals(signals)
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
