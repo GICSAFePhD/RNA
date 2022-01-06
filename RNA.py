@@ -1017,7 +1017,7 @@ def create_semaphore(semaphores,semaphore_source,railJoint):
     
     semaphores[n+3] = {'Id':'sig'+str(n+3),'Net':net,'Type':type,'Direction':direction,'Position':position,'Coordinate':coordinate}
     #print(f'  Creating a {type} semaphore[{n+3}] @{net} in {coordinate}|{semaphore_source}')
-    
+
 def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch):        
     
     continue_straight = False
@@ -1286,7 +1286,6 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                 atTrack = "left" if bufferStops[node][i]["Direction"] == "normal" else "right"
                 direction = bufferStops[node][i]["Direction"]
                 
-                
                 #print(node,netPaths[node],side,direction,nodes[node])
                 
                 if position_index == "End":
@@ -1295,7 +1294,8 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                     position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
                     
                 #print(node,position_index,position)
-                signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position}
+                name = "B"+str(len(signals)+1).zfill(2)
+                signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
                 #print(sig_number,signals[sig_number])
     return signals
 
@@ -1328,17 +1328,21 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         
         if continue_node in signal_placement:
             
-            direction = "reverse"
-            atTrack = "right"
+            direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse" # TODO ACA
+            atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
             pos = sw_info["Position"]
             
             side = "Next" if ("Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"]) else "Prev"
 
+            name = "C"+str(len(signals)+1).zfill(2)
             if side in signal_placement[continue_node]:
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 position = closest_safe_point(signal_placement[continue_node][side],pos)
 
-                signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position}
+                if sig_number == "sig30":
+                    print(atTrack,pos,side,position,direction)
+                
+                signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position,"Name":name}
                 print(f'     Continue - {sig_number}:{signals[sig_number]}')
         
         # For branch course
@@ -1352,7 +1356,9 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             
             position = [signal_placement[branch_node][side][0][0],-signal_placement[branch_node][side][0][1]]
             
-            signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
+            name = "B"+str(len(signals)+1).zfill(2)
+            
+            signals[sig_number] = {"From":branch_node,"To":branch_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position,"Name":name}
             print(f'     Branch - {sig_number}:{signals[sig_number]}')
         
         # For start course
@@ -1367,10 +1373,12 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             pos = sw_info["Position"]
             side = "Next" if "Next" in netPaths[start_node] else "Prev"
             position = closest_safe_point(signal_placement[start_node][side],pos)
-
-            direction = "normal" if position[0] > pos[0] else "reverse"
-                
-            signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            
+            direction = "normal" if position[0] < pos[0] else "reverse"
+            
+            name = "S"+str(len(signals)+1).zfill(2)
+            
+            signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
             
             # Manouver
@@ -1385,9 +1393,14 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 side = "Next" if "Next" in netPaths[start_node] else "Prev"
                 position = closest_safe_point(signal_placement[start_node][side],pos)
                 
-                direction = "normal" if position[0] > pos[0] else "reverse"
+                #if sig_number == "sig30":
+                #print(sig_number,atTrack,pos,side,position)
                 
-                signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position}
+                direction = "normal" if position[0] < pos[0] else "reverse"
+                
+                name = "H"+str(len(signals)+1).zfill(2)
+                
+                signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position,"Name":name}
                 print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
                 depth -= 1
 
@@ -1395,8 +1408,8 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
 
 # Find signals for railJoints
 def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals):
-    distance = 150
-    # Find every level crossing on the network
+    distance = 200
+    # Find every railway joint on the network
     for joint in trainDetectionElements:
         node = trainDetectionElements[joint]["Node"] 
         pos = trainDetectionElements[joint]["Position"]
@@ -1405,21 +1418,23 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         direction = "normal"
         atTrack = "left"
         position = closest_safe_point(signal_placement[node]["Next"],pos)
+        name = "J"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
         
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
         position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        name = "J"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
         
     return signals
 
@@ -1435,21 +1450,23 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
         direction = "normal"
         atTrack = "left"
         position = closest_safe_point(signal_placement[node]["Next"],pos)
+        name = "X"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
         
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
         position = closest_safe_point(signal_placement[node]["Prev"],pos)
         
+        name = "X"+str(len(signals)+1).zfill(2)
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
         
     return signals
 
@@ -1466,19 +1483,21 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
         direction = "normal"
         atTrack = "left"
         position = closest_safe_point(signal_placement[node]["Next"],pos)
+        name = "P"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
 
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
         position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        name = "P"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         if (abs(position[0]-pos[0]) < distance):
-            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position}
+            signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
 
     return signals
 
@@ -1501,28 +1520,28 @@ def closest_safe_point(safe_points,position):
 # Reduce redundant signals
 def reduce_signals(signals):
     
-    
     delete = []
     for signal_a in signals:
         for signal_b in signals:
             if signal_a != signal_b:
                 if signals[signal_a]["From"] == signals[signal_b]["From"]:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
-                        print(signal_a,signal_b,int(signal_a[3:]))
-                        if int(signal_a[3:]) < int(signal_b[3:]):
-                            delete.append(signal_b)
+                        if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                            if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                                #print(signal_a,signal_b,int(signal_a[3:]))
+                                if int(signal_a[3:]) < int(signal_b[3:]):
+                                    delete.append(signal_b)
     
     
     for delete_signal in delete:
         del signals[delete_signal]
-    
 
 def export_signal(file,signals,object):
 
     with open(file, "w") as f: 
         #print(signals)
         for sig in signals:
-            f.write(f'{str(sig).zfill(2)}:\n')
+            f.write(f'{str(sig).zfill(2)} [{signals[sig]["Name"]}]:\n')
             f.write(f'\tFrom: {signals[sig]["From"]} | To: {signals[sig]["To"]}\n')
             #f.write(f'\tSwitch: {signals[sig]["Switch"]}\n')
             f.write(f'\tType: {signals[sig]["Type"]} | Direction: {signals[sig]["Direction"]} | AtTrack: {signals[sig]["AtTrack"]} \n')
@@ -1546,7 +1565,8 @@ def export_signal(file,signals,object):
                 sem.IsSwitchable = "false"                   # IsSwitchable
                 # Create name
                 sem.create_Name()
-                sem.Name[0].Name = "S"+sem.Id[-2:]     # Name
+                #print(sem.Id,signals[sem.Id]["Name"])
+                sem.Name[0].Name = signals[sem.Id]["Name"]  #"S"+sem.Id[-2:]     # Name
                 sem.Name[0].Language = "en"                         # Language
                 # Create SpotLocation
                 sem.create_SpotLocation()
@@ -1751,11 +1771,11 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 
                 # next_position
                 next_place = signal_placement[node]["Next"]
-                next_place = [round(x_middle_point-step,1),round(y_coordinate,1)]
+                next_place = [round(x_middle_point-step/2,1),round(y_coordinate,1)]
                 
                 # prev_position
                 prev_place = signal_placement[node]["Prev"]
-                prev_place = [round(x_middle_point+step,1),round(y_coordinate,1)]
+                prev_place = [round(x_middle_point+step/2,1),round(y_coordinate,1)]
                 
                 # Upload both positions to the node
                 #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
@@ -1827,12 +1847,14 @@ def export_placement(file,nodes,signal_placement):
         f.close()
 
 def move_signals(signals):
-    step = 90
-    for signal_a in signals:
+    move_step = 90
+    for signal_a in reversed(signals):
         for signal_b in signals:
             if signal_a != signal_b and signals[signal_a]["Position"] == signals[signal_b]["Position"]:
                 #print(signal_a,signal_b)
-                signals[signal_b]["Position"] = [signals[signal_b]["Position"][0]+step,signals[signal_b]["Position"][1]]
+                step = move_step if signals[signal_a]["Direction"] == "normal" else -move_step
+
+                signals[signal_b]["Position"] = [signals[signal_b]["Position"][0]-step,signals[signal_b]["Position"][1]]
 
 ##%%%
 def analyzing_object(object):
