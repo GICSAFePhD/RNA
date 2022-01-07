@@ -1271,7 +1271,7 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     
     # Reduce redundant signals
     print(" Reducing redundant signals")
-    reduce_signals(signals)
+    reduce_signals(signals,signal_placement)
     
     #print(signals)
     for sig in signals:
@@ -1532,27 +1532,74 @@ def closest_safe_point(safe_points,position):
     #print(closest)
     return [closest[0],-closest[1]]
 
+# Is it a safe point between?
+def no_safe_points_between(safe_points,a_position,b_position):
+    
+    for safe in safe_points:
+        if a_position > safe and safe > b_position:
+            return False
+        if a_position < safe and safe < b_position:
+            return False 
+    return True
+
 # Reduce redundant signals
-def reduce_signals(signals):
+def reduce_signals(signals,signal_placement):
     
     delete = []
+    
+    #print(signal_placement)
     for signal_a in signals:
         for signal_b in signals:
-            if signal_a != signal_b:
-                if signals[signal_a]["From"] == signals[signal_b]["From"]:
+            if signal_a != signal_b and signals[signal_a]["From"] == signals[signal_b]["From"]:
+
+                side = "Next" if signals[signal_a]["AtTrack"] == "right" else "Prev"
+                #print(signals[signal_a]["From"],signal_placement[signals[signal_a]["From"]],side)
+                
+                danger_positions = [danger[0] for danger in signal_placement[signals[signal_a]["From"]][side]] if side in signal_placement[signals[signal_a]["From"]] else []
+
+                a_position = signals[signal_a]["Position"][0]
+                b_position = signals[signal_b]["Position"][0]
+                if no_safe_points_between(danger_positions,a_position,b_position):
+                
+                    #if signals[signal_a]["From"] == signals[signal_b]["From"]:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
-                                #print(signal_a,signal_b,int(signal_a[3:]))
                                 if int(signal_a[3:]) < int(signal_b[3:]):
+                                    print(f'A removing {signal_b} for {signal_a}')
                                     delete.append(signal_b)
-                    if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "B":
-                        if signal_a not in delete:
-                            delete.append(signal_a)
-                    if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "J":
-                        if signal_b not in delete:
-                            delete.append(signal_b)
-    
+                    
+                    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                        if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                            if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "B":
+                                if signal_a not in delete:
+                                    print(f'B removing {signal_a} for {signal_b}')
+                                    delete.append(signal_a)
+                            if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "J":
+                                if signal_b not in delete:
+                                    print(f'C removing {signal_b} for {signal_a}')
+                                    delete.append(signal_b)
+                            if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "S":
+                                if signal_a not in delete:
+                                    print(f'D removing {signal_a} for {signal_b}')
+                                    delete.append(signal_a)
+                            if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "C":
+                                if signal_b not in delete:
+                                    print(f'E removing {signal_b} for {signal_a}')
+                                    delete.append(signal_b)
+
+                    
+                    #if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "B":
+                    #    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                    #        if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                    #            if signal_a not in delete:
+                    #                delete.append(signal_a)
+                    #if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "C":
+                    #    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                    #        if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                    #            if signal_b not in delete:
+                    #                delete.append(signal_b)        
+                    
     for delete_signal in delete:
         del signals[delete_signal]
 
@@ -1690,16 +1737,18 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             # next_position = RailJoint_position - one step
             next_place = signal_placement[node]["Next"]
             next_place = [round(railJoint_position[0]-step/2,1),round(railJoint_position[1],1)]
-
+            
             # prev_position = RailJoint_position + one step
             prev_place = signal_placement[node]["Prev"]
             prev_place = [round(railJoint_position[0]+step/2,1),round(railJoint_position[1],1)]
 
             # Upload both positions to the node
             #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            signal_placement[node]["Next"].append(next_place)
-            signal_placement[node]["Prev"].append(prev_place)
-        
+            if next_place:
+                signal_placement[node]["Next"].append(next_place)
+            if prev_place:
+                signal_placement[node]["Prev"].append(prev_place)
+        #print(signal_placement)
         # If there is a Platform:
         if node in platforms_node:
             platform_position = platforms_node[node]["Position"]
@@ -1717,9 +1766,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
             # Upload both positions to the node
             #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            signal_placement[node]["Next"].append(next_place)
-            signal_placement[node]["Prev"].append(prev_place)
-
+            if next_place:
+                signal_placement[node]["Next"].append(next_place)
+            if prev_place:
+                signal_placement[node]["Prev"].append(prev_place)
         # If there is a LevelCrossing:
         if node in crossing_nodes:
             crossing_positions = crossing_nodes[node]["Position"]
@@ -1739,13 +1789,12 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
             signal_placement[node]["Next"].append(next_place)
             signal_placement[node]["Prev"].append(prev_place)
-        
         # If there is a curve:
         if nodes[node]["Lines"] > 1:
             all_points = nodes[node]["All"]
             curve_positions  = all_points[1:-1]
             print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
-            
+
             # Find orientation of the curve
             orientation = []
             for point in range(len(all_points)-1):
@@ -1757,25 +1806,37 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
+            #print(signal_placement)
+            #print(signal_placement[node]["Next"],signal_placement[node]["Prev"])
+            
             # next_position = curve_position(previous node, close to the curve) - one step
             next_place = signal_placement[node]["Next"]
-
+            #print(f'next: {next_place}')
             for curve in range(len(curve_positions)):
-                if orientation[curve+1] == "/":                        
-                    next_place = [round(curve_positions[curve][0]-step/2,1),round(curve_positions[curve][1],1)]
+                if orientation[curve+1] == "/":                      
+                    next_place.append([round(curve_positions[curve][0]-step/2,1),round(curve_positions[curve][1],1)])
             
+            #print(f'next +: {next_place}')
             # prev_position = curve_position(next node, close to the curve) + one step
             prev_place = signal_placement[node]["Prev"]
-
+            #print(f'prev: {prev_place}')
             for curve in range(len(curve_positions)):
                 if orientation[curve] == "/":                        
-                    prev_place = [round(curve_positions[curve][0]+step/2,1),round(curve_positions[curve][1],1)]
-
+                    prev_place.append([round(curve_positions[curve][0]+step/2,1),round(curve_positions[curve][1],1)])
+            
+            #print(f'prev +: {prev_place}')
+            
             # Upload both positions to the node
-            if next_place:
-                signal_placement[node]["Next"].append(next_place)
-            if prev_place:
-                signal_placement[node]["Prev"].append(prev_place)
+            #print(f'{next_place} in {signal_placement[node]["Next"]}')
+            #print(f'{prev_place} in {signal_placement[node]["Prev"]}')
+            for i in next_place:
+                if i not in signal_placement[node]["Next"]:
+                    signal_placement[node]["Next"].append(i)
+            for i in prev_place:
+                if i not in signal_placement[node]["Prev"]:
+                    signal_placement[node]["Prev"].append(i)
+            #print(f'R:{next_place} in {signal_placement[node]["Next"]}')
+            #print(f'R:{prev_place} in {signal_placement[node]["Prev"]}')
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
         if node not in signal_placement:
             if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
@@ -1805,7 +1866,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     
     # Simplify closest signal placements
     signal_simplification_by_proximity(signal_placement)
-    
+
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
@@ -1824,22 +1885,22 @@ def signal_simplification_by_proximity(signal_placement):
         old_prev = signal_placement[node]["Prev"]
         n_p_next = old_next
         n_p_prev = old_prev
-        
+    
         for n in old_next:
             for p in old_prev:
+                #print(node,old_next,old_prev)
                 if old_next.index(n) == old_prev.index(p):
                     continue
-                #print(n,p,abs(n[0]-p[0]))
+                #print(n,p,abs(n[0]-p[0]),distance,abs(n[0]-p[0]) < distance)
                 if abs(n[0]-p[0]) < distance:
                     n_p_next.remove(n)
                     n_p_prev.remove(p)
-        
+
         #print(n_p_next)
         #print(n_p_prev)
     
         signal_placement[node]["Next"] = n_p_next
         signal_placement[node]["Prev"] = n_p_prev
-    
     return signal_placement
 
 # Order que "All" attribute for nodes:
@@ -1893,12 +1954,13 @@ def analyzing_object(object):
     infrastructure_file = "F:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
-    print(" Detecting Danger --> Signalling.RNA")
+    print(" Detecting Danger --> Safe_points.RNA")
     signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
     #print(f' Signal (possible) places:{signal_placement}')
+    print(" Creating Signalling --> Signalling.RNA")
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     move_signals(signals)
