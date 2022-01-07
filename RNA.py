@@ -1153,10 +1153,11 @@ def find_nodes(start_node,netPaths,semaphores):
     return end_nodes
 
 # Find depth of a branch
-def branch_depth(nodes,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms):
+def branch_depth(nodes,switchesIS,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms):
     
     #print(nodes)
     #print(netPaths)
+    #switchesIS[switch]
     #print(nodeRole)
     #print(nodeSwitch)
     
@@ -1164,14 +1165,27 @@ def branch_depth(nodes,netPaths,nodeRole,nodeSwitch,trainDetectionElements,level
         depth = 0
         if "Start" in nodeRole[node] and "Branch" not in nodeRole[node]:
             pivot_node = node
-            
+            #print("-",pivot_node)
             while "Start" in nodeRole[pivot_node]:
                 next_switch = nodeRole[pivot_node]["Start"]
-                pivot_node = nodeSwitch[next_switch]["Branch"]
-                if "Continue" not in nodeRole[pivot_node]:
-                    depth += 1
-        nodes[node] |= {"Depth":depth}
+                
+                # Don't choose a one way rail
+                if "Branch" in nodeSwitch[next_switch] and "Start" in nodeRole[nodeSwitch[next_switch]["Branch"]]:
+                    pivot_node = nodeSwitch[next_switch]["Branch"]
+                else:
+                    if "Continue" in nodeSwitch[next_switch]:
+                        position_a = nodes[pivot_node]["Begin"][1]
+                        pivot_node = nodeSwitch[next_switch]["Continue"]
+                        position_b = nodes[pivot_node]["Begin"][1]
+                        if position_a == position_b:
+                            depth += 1
+                            break
 
+                #print(pivot_node,next_switch)
+                depth += 1
+        
+        nodes[node] |= {"Depth":depth}
+        
 # Find the use of each node
 def find_node_roles(switchesIS):
     nodeRole = {}
@@ -1188,7 +1202,8 @@ def find_node_roles(switchesIS):
         start_node = sw_info["Node"]
         
         # Find continue and branch node node
-        [continue_node,branch_node] = [end_right if start_node == begin_right else begin_right,end_left if start_node == begin_left else end_left]
+        [continue_node,branch_node] = [end_right if start_node == begin_right else begin_right,end_left if start_node == begin_left else begin_left]
+
         if (sw_info["ContinueCourse"] == "right"): 
             # Continue course is right and branch course is left -> It was solved a line before
             pass
@@ -1222,7 +1237,7 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     nodeRole,nodeSwitch = find_node_roles(switchesIS)
     
     # Finde depth of branches
-    branch_depth(nodes,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms)
+    branch_depth(nodes,switchesIS,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms)
 
     # Find signals for bufferStops
     signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
@@ -1305,7 +1320,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
     #print(netPaths)
     #print(nodeRole)
     #print(nodeSwitch)
-
+    #print(netPaths)
     # Find every switch in the network
     for switch in switchesIS:
         sw_info = switchesIS[switch]
@@ -1328,7 +1343,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         
         if continue_node in signal_placement:
             
-            direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse" # TODO ACA
             atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
             pos = sw_info["Position"]
             
@@ -1338,15 +1352,16 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             if side in signal_placement[continue_node]:
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 position = closest_safe_point(signal_placement[continue_node][side],pos)
-
-                if sig_number == "sig30":
-                    print(atTrack,pos,side,position,direction)
+                
+                direction = "normal" if pos[0] > position[0] else "reverse"
+                atTrack = "left" if pos[0] > position[0] else "right"
                 
                 signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position,"Name":name}
                 print(f'     Continue - {sig_number}:{signals[sig_number]}')
         
         # For branch course
-        if "Start" not in nodeRole[branch_node]:
+        if branch_node in signal_placement and "Start" not in nodeRole[branch_node]:
+            
             sig_number = "sig"+str(len(signals)+1).zfill(2)
             
             direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse"
@@ -1531,7 +1546,12 @@ def reduce_signals(signals):
                                 #print(signal_a,signal_b,int(signal_a[3:]))
                                 if int(signal_a[3:]) < int(signal_b[3:]):
                                     delete.append(signal_b)
-    
+                    if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "B":
+                        if signal_a not in delete:
+                            delete.append(signal_a)
+                    if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "J":
+                        if signal_b not in delete:
+                            delete.append(signal_b)
     
     for delete_signal in delete:
         del signals[delete_signal]
