@@ -1560,14 +1560,13 @@ def reduce_signals(signals,signal_placement):
                 a_position = signals[signal_a]["Position"][0]
                 b_position = signals[signal_b]["Position"][0]
                 if no_safe_points_between(danger_positions,a_position,b_position):
-                
-                    #if signals[signal_a]["From"] == signals[signal_b]["From"]:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if int(signal_a[3:]) < int(signal_b[3:]):
-                                    print(f'A removing {signal_b} for {signal_a}')
-                                    delete.append(signal_b)
+                                    if signal_b not in delete:
+                                        print(f'A removing {signal_b} for {signal_a}')
+                                        delete.append(signal_b)
                     
                     if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                         if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
@@ -1589,16 +1588,16 @@ def reduce_signals(signals,signal_placement):
                                     delete.append(signal_b)
 
                     
-                    #if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "B":
-                    #    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
-                    #        if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
-                    #            if signal_a not in delete:
-                    #                delete.append(signal_a)
-                    #if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "C":
-                    #    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
-                    #        if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
-                    #            if signal_b not in delete:
-                    #                delete.append(signal_b)        
+                    if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "B":
+                        if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                            if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                                if signal_a not in delete:
+                                    delete.append(signal_a)
+                    if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "C":
+                        if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
+                            if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
+                                if signal_b not in delete:
+                                    delete.append(signal_b)        
                     
     for delete_signal in delete:
         del signals[delete_signal]
