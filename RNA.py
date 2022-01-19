@@ -1351,7 +1351,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             name = "C"+str(len(signals)+1).zfill(2)
             if side in signal_placement[continue_node]:
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
-                position = closest_safe_point(signal_placement[continue_node][side],pos)
+                position = closest_safe_point(signal_placement[continue_node][side],pos,side)
                 
                 direction = "normal" if pos[0] > position[0] else "reverse"
                 atTrack = "left" if pos[0] > position[0] else "right"
@@ -1387,7 +1387,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             atTrack = "left" if "Next" in netPaths[start_node] else "right"
             pos = sw_info["Position"]
             side = "Next" if "Next" in netPaths[start_node] else "Prev"
-            position = closest_safe_point(signal_placement[start_node][side],pos)
+            position = closest_safe_point(signal_placement[start_node][side],pos,side)
             
             direction = "normal" if position[0] < pos[0] else "reverse"
             
@@ -1406,7 +1406,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 atTrack = "left" if "Next" in netPaths[start_node] else "right"
                 pos = sw_info["Position"]
                 side = "Next" if "Next" in netPaths[start_node] else "Prev"
-                position = closest_safe_point(signal_placement[start_node][side],pos)
+                position = closest_safe_point(signal_placement[start_node][side],pos,side)
                 
                 #if sig_number == "sig30":
                 #print(sig_number,atTrack,pos,side,position)
@@ -1432,7 +1432,7 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
         name = "J"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
@@ -1443,7 +1443,7 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
         name = "J"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
@@ -1464,7 +1464,7 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
         name = "X"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
@@ -1475,7 +1475,7 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
         
         name = "X"+str(len(signals)+1).zfill(2)
         # If the safe position is far away, avoid the signal
@@ -1487,7 +1487,7 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
 
 # Find signals for platforms
 def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
-    distance = 250
+    distance = 210
     # Find every platform on the network
     for platform in platforms:
         node = platforms[platform]["Net"] 
@@ -1497,39 +1497,49 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = closest_safe_point(signal_placement[node]["Next"],pos)
+        position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
         name = "P"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
-
+            
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = closest_safe_point(signal_placement[node]["Prev"],pos)
+        position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
         name = "P"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
-
+            
     return signals
 
 # Find closest point between options
-def closest_safe_point(safe_points,position):
+def closest_safe_point(safe_points,position,direction,test=False):
     closest = []
     distance = []
-    
-    #print("$$",safe_points,position)
     
     for safe_point in safe_points:
         distance.append(abs(position[0]-safe_point[0]))
     
     index = distance.index(min(distance))
-    
     closest = safe_points[index]
-    #print(closest)
+    
+    if test:
+        print("**",safe_points,position,direction,closest)
+        
+    if (direction == "Next" and position[0] < closest[0]):
+        #print("LEFT")
+        closest = safe_points[index+1]
+    if (direction == "Prev" and position[0] > closest[0]):
+        #print("RIGHT")
+        closest = safe_points[index-1]
+    
+    if test:
+        print("$$",safe_points,position,direction,closest)
+        
     return [closest[0],-closest[1]]
 
 # Is it a safe point between?
@@ -1559,7 +1569,7 @@ def reduce_signals(signals,signal_placement):
 
                 a_position = signals[signal_a]["Position"][0]
                 b_position = signals[signal_b]["Position"][0]
-                if no_safe_points_between(danger_positions,a_position,b_position):
+                if no_safe_points_between(danger_positions,a_position,b_position) and abs(a_position-b_position) < 200:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
@@ -1586,7 +1596,6 @@ def reduce_signals(signals,signal_placement):
                                 if signal_b not in delete:
                                     print(f'E removing {signal_b} for {signal_a}')
                                     delete.append(signal_b)
-
                     
                     if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "B":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
@@ -1864,7 +1873,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 signal_placement[node]["Prev"].append(prev_place)
     
     # Simplify closest signal placements
-    signal_simplification_by_proximity(signal_placement)
+    signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node)
 
     # Deleting the signal placements with only no members
     for i in signal_placement:
@@ -1876,7 +1885,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     return signal_placement
 
 # Simplify closest signal placements
-def signal_simplification_by_proximity(signal_placement):
+def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node):
     distance = 100
     #print(signal_placement)
     for node in signal_placement:
@@ -1884,7 +1893,7 @@ def signal_simplification_by_proximity(signal_placement):
         old_prev = signal_placement[node]["Prev"]
         n_p_next = old_next
         n_p_prev = old_prev
-    
+
         for n in old_next:
             for p in old_prev:
                 #print(node,old_next,old_prev)
@@ -1892,8 +1901,16 @@ def signal_simplification_by_proximity(signal_placement):
                     continue
                 #print(n,p,abs(n[0]-p[0]),distance,abs(n[0]-p[0]) < distance)
                 if abs(n[0]-p[0]) < distance:
-                    n_p_next.remove(n)
-                    n_p_prev.remove(p)
+                    #print(node,n,p)
+                    crossing_pos = crossing_nodes[node]["Position"][0]
+                    platform_pos = platforms_node[node]["Position"][0]
+                    #print(crossing_pos,platform_pos)
+                    
+                    if (platform_pos < n[0] < crossing_pos or crossing_pos < n[0] < platform_pos) and (platform_pos < p[0] < crossing_pos or crossing_pos < p[0] < platform_pos):
+                        continue
+                    else:
+                        n_p_next.remove(n)
+                        n_p_prev.remove(p)
 
         #print(n_p_next)
         #print(n_p_prev)
@@ -1926,16 +1943,31 @@ def export_placement(file,nodes,signal_placement):
                     f.write(f'  Prev: {signal_placement[sig]["Prev"]}\n')
         f.close()
 
-def move_signals(signals):
-    move_step = 90
-    for signal_a in reversed(signals):
-        for signal_b in signals:
-            if signal_a != signal_b and signals[signal_a]["Position"] == signals[signal_b]["Position"]:
-                #print(signal_a,signal_b)
-                step = move_step if signals[signal_a]["Direction"] == "normal" else -move_step
+def move_signals(signals,moving=True):
+    if moving:
+        move_step = 90
+        for signal_a in reversed(signals):
+            for signal_b in signals:
+                if signal_a != signal_b and signals[signal_a]["Position"] == signals[signal_b]["Position"]:
+                    #print(signal_a,signal_b)
+                    step = move_step if signals[signal_a]["Direction"] == "normal" else -move_step
 
-                signals[signal_b]["Position"] = [signals[signal_b]["Position"][0]-step,signals[signal_b]["Position"][1]]
-
+                    signals[signal_b]["Position"] = [signals[signal_b]["Position"][0]-step,signals[signal_b]["Position"][1]]
+    else:
+        delete = []
+        
+        for signal_a in signals:
+            if signal_a in delete:
+                continue
+            for signal_b in signals:
+                if signal_a != signal_b:
+                    if signals[signal_a]["Position"] == signals[signal_b]["Position"]:
+                        if signal_b not in delete:
+                            delete.append(signal_b)
+                            print(signal_a,signal_b)
+        
+        for delete_signal in delete:
+            del signals[delete_signal]
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1962,7 +1994,8 @@ def analyzing_object(object):
     print(" Creating Signalling --> Signalling.RNA")
     #signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
-    move_signals(signals)
+    move_signals(signals,False)
+    
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
