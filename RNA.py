@@ -1050,95 +1050,104 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     return continue_straight, branch_straight
 
 # Detect the routes
-def detect_routes(semaphores,netPaths):
+def detect_routes(signals,netPaths):
     routes = {}
     
-    #print(semaphores)
+    #print(signals)
     #print(netPaths)
     
-    semaphores_in_node = find_semaphores_in_node(semaphores)
-    print(semaphores_in_node)
-    
-    return routes
+    signals_in_node = find_semaphores_in_node(signals)
+    #print(signals_in_node)
+
 
     route = 1
-    for sig in semaphores:
+    for sig in signals:
         #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
         # Find the start semaphore with director + start node
-        start_signal = sig
-        start_node = semaphores[sig]["Net"]
-        side = semaphores[sig]["Direction"]
-        # Find all the next nodes
-        end_nodes = []
-        #print(f'>> {start_node}|{sig}')
-        end_nodes = find_next_nodes(start_node,side,semaphores_in_node,netPaths,end_nodes)
-        
-        #if end_nodes:
-        #    print(end_nodes)
-        
-        for n in range(len(end_nodes)): 
-            # Find all the semaphores at the nodes with the same direction than the start semaphore
-            end_signals = find_semaphores(end_nodes[n],semaphores) # TODO
-            print(end_signals)
-            for s in range(len(end_signals)):
-                route += 1
-                print(f'Route_{route} : {start_signal}[{start_node}] to {end_signals[s]}|{end_nodes[n]}')
+        if signals[sig]["Name"][0] != "T":
+            start_signal = sig
+            start_node = signals[sig]["From"]
+            way = signals[sig]["Way"]
+            
+            # Find all the next nodes
+            end_nodes = []
+            #print(f'>> {sig}')
+            
+            end_nodes = find_next_nodes(start_node,way,signals_in_node,netPaths,end_nodes)
+            
+            #if end_nodes:
+            #    print(start_signal,end_nodes)
+            
+            for n in range(len(end_nodes)): 
+                # Find all the semaphores at the nodes with the same direction than the start semaphore
+                end_signals = find_semaphores(end_nodes[n],signals) # TODO
+                print(start_signal,end_signals)
+                for s in range(len(end_signals)):
+                    route += 1
+                    #print(f'Route_{route} : {start_signal} [{start_node}] to {end_signals[s]} [{end_nodes[n]}]')
     return routes
 
 # Find the next nodes with semaphores with the same direction than the start semaphore
-def find_next_nodes(start_node,side,semaphores_in_node,netPaths,end_nodes):
+def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes):
     #end_nodes = []
 
-    direction = "Next" if side == "left" else "Prev"
+    direction = "Next" if way == ">>" else "Prev"
     
     if direction in netPaths[start_node]:   # There is a next/prev node
         #print(f'{start_node} has a {direction} node')
+        
+        #for node in netPaths[start_node][direction]:
+        #    print(f'XX {node}')
+        
         # Check ALL the next/prev nodes
         for node in netPaths[start_node][direction]: 
+            #print(f'{start_node} > {node}')
             # If the next/prev node has a semaphore in the same direction
+            #if node in semaphores_in_node:
+            #    print(direction,semaphores_in_node[node])
             if node in semaphores_in_node and direction in semaphores_in_node[node]:
                 #print(f'{node} {node in semaphores_in_node} and {direction} {direction in semaphores_in_node[node]}')
-                print(f'+Adding {node}')
+                #print(f'+Adding {node}')
                 end_nodes.append(node)
                 #print(f'{end_nodes}')
             else:   # If there is no semaphore or it is not in the same direction
                 #print(f'{node} has not a semaphore in the same direction')
-                end_nodes = find_next_nodes(node,side,semaphores_in_node,netPaths,end_nodes)
+                end_nodes = find_next_nodes(node,way,semaphores_in_node,netPaths,end_nodes)
     else: # There is not a next/prev node
         return end_nodes
-    
-    #print(f'Finish: {end_nodes}')
+
     return end_nodes
 
 # Find the semaphores at the node
-def find_semaphores_in_node(semaphores):
-    semaphores_in_node = {}
+def find_semaphores_in_node(signals):
+    signals_in_node = {}
     
-    for sig in semaphores:
+    for sig in signals:
         # Adding the node
-        if semaphores[sig]["Net"] not in semaphores_in_node:
-            semaphores_in_node[semaphores[sig]["Net"]] = {"Next":[],"Prev":[]}
+        if signals[sig]["From"] not in signals_in_node:
+            signals_in_node[signals[sig]["From"]] = {"Next":[],"Prev":[]}
         # Updating for each direction
-        if semaphores[sig]["Direction"] == "left":
-            semaphores_in_node[semaphores[sig]["Net"]]["Next"].append(sig)
+        #if signals[sig]["AtTrack"] == "left":
+        if signals[sig]["Way"] == ">>":
+            signals_in_node[signals[sig]["From"]]["Next"].append(sig)
         else:
-            semaphores_in_node[semaphores[sig]["Net"]]["Prev"].append(sig)
+            signals_in_node[signals[sig]["From"]]["Prev"].append(sig)
     
     # Deleting the semaphores with only no members
-    for i in semaphores_in_node:
-        if semaphores_in_node[i]["Prev"] == []:
-            del semaphores_in_node[i]["Prev"]
-        if semaphores_in_node[i]["Next"] == []:
-            del semaphores_in_node[i]["Next"]
+    for i in signals_in_node:
+        if signals_in_node[i]["Prev"] == []:
+            del signals_in_node[i]["Prev"]
+        if signals_in_node[i]["Next"] == []:
+            del signals_in_node[i]["Next"]
     
-    return semaphores_in_node
+    return signals_in_node
 
 # Find semaphores based on nodes
 def find_semaphores(node,semaphores):
     end_signals = []
 
     for semaphore in semaphores:
-        if semaphores[semaphore]["Net"] == node:
+        if semaphores[semaphore]["From"] == node:
             end_signals.append(semaphore)
     
     return end_signals
@@ -1309,7 +1318,7 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                     position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
                     
                 #print(node,position_index,position)
-                name = "B"+str(len(signals)+1).zfill(2)
+                name = "T"+str(len(signals)+1).zfill(2)
                 signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
                 #print(sig_number,signals[sig_number])
     return signals
@@ -1580,11 +1589,11 @@ def reduce_signals(signals,signal_placement):
                     
                     if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                         if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
-                            if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "B":
+                            if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "T":
                                 if signal_a not in delete:
                                     print(f'B removing {signal_a} for {signal_b}')
                                     delete.append(signal_a)
-                            if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "J":
+                            if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "J":
                                 if signal_b not in delete:
                                     print(f'C removing {signal_b} for {signal_a}')
                                     delete.append(signal_b)
@@ -1597,17 +1606,19 @@ def reduce_signals(signals,signal_placement):
                                     print(f'E removing {signal_b} for {signal_a}')
                                     delete.append(signal_b)
                     
-                    if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "B":
+                    if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "T":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if signal_a not in delete:
+                                    print(f'F removing {signal_b} for {signal_a}')
                                     delete.append(signal_a)
-                    if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "C":
+                    if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "C":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if signal_b not in delete:
-                                    delete.append(signal_b)        
-                    
+                                    print(f'G removing {signal_b} for {signal_a}')
+                                    delete.append(signal_b)   
+    
     for delete_signal in delete:
         del signals[delete_signal]
 
@@ -1616,7 +1627,10 @@ def export_signal(file,signals,object):
     with open(file, "w") as f: 
         #print(signals)
         for sig in signals:
-            f.write(f'{str(sig).zfill(2)} [{signals[sig]["Name"]}]:\n')
+            if "Way" in signals[sig]:
+                f.write(f'{str(sig).zfill(2)} [{signals[sig]["Name"]}] {signals[sig]["Way"]}:\n')
+            else:
+                f.write(f'{str(sig).zfill(2)} [{signals[sig]["Name"]}]:\n')
             f.write(f'\tFrom: {signals[sig]["From"]} | To: {signals[sig]["To"]}\n')
             #f.write(f'\tSwitch: {signals[sig]["Switch"]}\n')
             f.write(f'\tType: {signals[sig]["Type"]} | Direction: {signals[sig]["Direction"]} | AtTrack: {signals[sig]["AtTrack"]} \n')
@@ -1922,7 +1936,12 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
 # Order que "All" attribute for nodes:
 def order_nodes_points(nodes):
     
-    for node in nodes:
+    for node in nodes: 
+        if nodes[node]["All"][0] < nodes[node]["All"][-1]:
+            nodes[node]["Way"] = ">>"
+        else:
+            nodes[node]["Way"] = "<<"
+        
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -1943,6 +1962,20 @@ def export_placement(file,nodes,signal_placement):
                     f.write(f'  Prev: {signal_placement[sig]["Prev"]}\n')
         f.close()
 
+def find_way(signals,nodes):
+
+    for sig in signals:
+        #print(sig,signals[sig]["From"],nodes[signals[sig]["From"]]["Way"],signals[sig]["AtTrack"])
+        
+        if signals[sig]["AtTrack"] == "left":
+            #print(sig,nodes[signals[sig]["From"]]["Way"])
+            way = nodes[signals[sig]["From"]]["Way"]
+        else:
+            way = "<<" if nodes[signals[sig]["From"]]["Way"] == ">>" else "<<"
+            #print(sig,way)
+            
+        signals[sig]["Way"] = way
+        
 def move_signals(signals,moving=True):
     if moving:
         move_step = 90
@@ -1964,7 +1997,7 @@ def move_signals(signals,moving=True):
                     if signals[signal_a]["Position"] == signals[signal_b]["Position"]:
                         if signal_b not in delete:
                             delete.append(signal_b)
-                            print(signal_a,signal_b)
+                            #print(signal_a,signal_b)
         
         for delete_signal in delete:
             del signals[delete_signal]
@@ -1990,19 +2023,20 @@ def analyzing_object(object):
     safe_point_file = "F:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
-    #print(f' Signal (possible) places:{signal_placement}')
+    print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
-    #signals_file = "C:\PhD\RailML\\Dangers.RNA"
+    signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     move_signals(signals,False)
+    find_way(signals,nodes)
     
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
 
     #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
     #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
     
-    #print(" Detecting Routes --> Routes.RNA")
-    #routes = detect_routes(semaphores,netPaths)
-    #export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
+    print(" Detecting Routes --> Routes.RNA")
+    routes = detect_routes(signals,netPaths)
+    export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
     
     #print(" Analyzing danger zones --> Danger.RNA")
