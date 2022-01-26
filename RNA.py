@@ -947,7 +947,10 @@ def export_routes(file,routes,object):
         for route in routes:
             f.write(f'route_{route} [{routes[route]["Start"]} {routes[route]["Way"]} {routes[route]["End"]}]:\n')
             f.write(f'\tPath: {routes[route]["Path"]}\n')
-            f.write(f'\tSwitches: {routes[route]["Switches"]}\n')
+            if routes[route]["Switches"]:
+                f.write(f'\tSwitches: {routes[route]["Switches"]}\n')
+            if routes[route]["Platforms"]:
+                f.write(f'\tPlatforms: {routes[route]["Platforms"]}\n')
         f.close()
 
 # Calculate intrindic coordinate
@@ -1053,12 +1056,13 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     return continue_straight, branch_straight
 
 # Detect the routes
-def detect_routes(signals,netPaths,switchesIS):
+def detect_routes(signals,netPaths,switchesIS,platforms):
     routes = {}
-    print(netPaths)
+    #print(netPaths)
     signals_in_node = find_semaphores_in_node(signals)
-    print(signals_in_node)
-
+    #print(signals_in_node)
+    graph = get_graph(netPaths)
+    
     route = 0
     for sig in signals:
         #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
@@ -1070,27 +1074,18 @@ def detect_routes(signals,netPaths,switchesIS):
             
             # Find all the next nodes
             end_nodes = []
-            #print(f'>> {sig}')
-            
             end_nodes = find_next_nodes(start_node,way,signals_in_node,netPaths,end_nodes)
-            #if end_nodes:
-            #    print(start_signal,end_nodes)
-                
-            #if start_node == "ne1":
             paths = find_path_between_nodes(start_node,end_nodes,netPaths,way)
-            
-            #print(start_signal,paths)
             
             for node in range(len(end_nodes)): 
                 # Find all the semaphores at the nodes with the same direction than the start semaphore
                 end_signal = find_semaphores(end_nodes[node],start_signal,signals)
                 # Find switches within the path
-                
-                switches = find_switches_in_the_path(paths[node],netPaths,switchesIS)
-                
+                switches = find_switches_in_the_path(paths[node],switchesIS)
+                platform = find_platforms_in_the_path(paths[node],platforms)
                 route += 1
                 #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
-                routes[route] ={'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches}
+                routes[route] ={'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform}
                 
 
     return routes
@@ -1110,8 +1105,7 @@ def get_graph(netPaths):
 
     #print(graph)
     return graph
-    
-    
+
 def find_shortest_path(graph, start, end, path=[]):
     path = path + [start]
     #print(f'Path:{path}')
@@ -1128,7 +1122,7 @@ def find_shortest_path(graph, start, end, path=[]):
                     shortest = newpath
     return shortest
 
-def find_switches_in_the_path(path,netPaths,switchesIS):
+def find_switches_in_the_path(path,switchesIS):
     switches = []
     
     for i in switchesIS:
@@ -1138,19 +1132,30 @@ def find_switches_in_the_path(path,netPaths,switchesIS):
     
     return switches
 
+def find_platforms_in_the_path(path,platforms):
+    platform = []
+    
+    for i in platforms:
+        #print(i,switchesIS[i])
+        if platforms[i]['Node'] in path:
+            platform.append(i)
+    
+    return platform
+
 def find_path_between_nodes(start_node,end_nodes,netPaths,way):
     
     paths = []
     
+    print(start_node,way,end_nodes)
     for end_node in end_nodes:
         graph = get_graph(netPaths)
         path = find_shortest_path(graph, start_node, end_node, path=[])
-        print(f'Finding a path from {start_node} {way} {end_node} : {path}')
+        #print(f'Finding a path from {start_node} {way} {end_node} : {path}')
         paths.append(path)
     return paths
 
 # Find the next nodes with semaphores with the same direction than the start semaphore
-def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes):
+def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes = []):
     #end_nodes = []
 
     direction = "Next" if way == ">>" else "Prev"
@@ -2087,7 +2092,7 @@ def analyzing_object(object):
     #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
     
     print(" Detecting Routes --> Routes.RNA")
-    routes = detect_routes(signals,netPaths,switchesIS)
+    routes = detect_routes(signals,netPaths,switchesIS,platforms)
     export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
 # %%
 #
