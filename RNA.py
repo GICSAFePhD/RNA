@@ -1,5 +1,7 @@
 
-from os import execlp
+from lib2to3.pytree import Node
+from os import execlp, startfile
+from posixpath import pathsep
 from re import L, S
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
@@ -1053,14 +1055,10 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
 def detect_routes(signals,netPaths):
     routes = {}
     
-    #print(signals)
-    #print(netPaths)
-    
     signals_in_node = find_semaphores_in_node(signals)
     #print(signals_in_node)
 
-
-    route = 1
+    route = 0
     for sig in signals:
         #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
         # Find the start semaphore with director + start node
@@ -1074,18 +1072,72 @@ def detect_routes(signals,netPaths):
             #print(f'>> {sig}')
             
             end_nodes = find_next_nodes(start_node,way,signals_in_node,netPaths,end_nodes)
-            
             #if end_nodes:
             #    print(start_signal,end_nodes)
+                
+            #if start_node == "ne1":
+            paths = find_path_between_nodes(start_node,end_nodes,netPaths,way)
             
-            for n in range(len(end_nodes)): 
+            #if end_nodes:
+            #    print(start_signal,end_nodes,paths)
+            
+            for node in range(len(end_nodes)): 
                 # Find all the semaphores at the nodes with the same direction than the start semaphore
-                end_signals = find_semaphores(end_nodes[n],signals) # TODO
-                print(start_signal,end_signals)
-                for s in range(len(end_signals)):
-                    route += 1
-                    #print(f'Route_{route} : {start_signal} [{start_node}] to {end_signals[s]} [{end_nodes[n]}]')
+                end_signal = find_semaphores(end_nodes[node],start_signal,signals)
+                #print(start_signal,end_signal)
+                route += 1
+                print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
+                routes[route] ={'Start':start_signal,'End':end_signal,'Path':paths[node]}
+                
+
     return routes
+
+def find_path_between_nodes(start_node,end_nodes,netPaths,way):
+    
+    paths = []
+    
+    for end_node in end_nodes:
+        path = find_path(start_node,end_node,netPaths,way, path = {})
+        #print(f'Finding a path from {start_node} {way} {end_node} : {path}')
+        paths.append(path)
+    return paths
+
+def find_path(start,end,netPaths,way,path={},route_n = 0):
+    
+    direction = "Prev" if way == "<<" else "Next"
+    
+    node = start
+    if route_n not in path:
+        path[route_n] = [node]
+
+    #print(node,netPaths[node]) 
+    while node != end:
+        if direction in netPaths[node]:
+            #print(f'{node} {way} {netPaths[node][direction]}') 
+            for i in range(len(netPaths[node][direction])):
+                
+                if route_n in path:
+                    if i == 0:
+                        #print("New branch!")
+                        route_n += i+1
+                        path[route_n] = path[route_n-(i+1)]
+                    else:
+                        route_n += i
+                        path[route_n] = path[route_n-i][:-1]
+                
+                next = netPaths[node][direction][i]
+                if next not in path[route_n]:
+                    path[route_n].append(next)
+                    
+                #print(route_n,path[route_n])
+                
+                if path[route_n][0] == start and path[route_n][-1] == end:
+                    return path[route_n]
+
+            node = next
+        else:
+            return path[route_n]
+
 
 # Find the next nodes with semaphores with the same direction than the start semaphore
 def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes):
@@ -1096,22 +1148,13 @@ def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes):
     if direction in netPaths[start_node]:   # There is a next/prev node
         #print(f'{start_node} has a {direction} node')
         
-        #for node in netPaths[start_node][direction]:
-        #    print(f'XX {node}')
-        
         # Check ALL the next/prev nodes
         for node in netPaths[start_node][direction]: 
-            #print(f'{start_node} > {node}')
             # If the next/prev node has a semaphore in the same direction
             #if node in semaphores_in_node:
-            #    print(direction,semaphores_in_node[node])
             if node in semaphores_in_node and direction in semaphores_in_node[node]:
-                #print(f'{node} {node in semaphores_in_node} and {direction} {direction in semaphores_in_node[node]}')
-                #print(f'+Adding {node}')
                 end_nodes.append(node)
-                #print(f'{end_nodes}')
             else:   # If there is no semaphore or it is not in the same direction
-                #print(f'{node} has not a semaphore in the same direction')
                 end_nodes = find_next_nodes(node,way,semaphores_in_node,netPaths,end_nodes)
     else: # There is not a next/prev node
         return end_nodes
@@ -1143,14 +1186,12 @@ def find_semaphores_in_node(signals):
     return signals_in_node
 
 # Find semaphores based on nodes
-def find_semaphores(node,semaphores):
-    end_signals = []
+def find_semaphores(node,start_signal,signals):
 
-    for semaphore in semaphores:
-        if semaphores[semaphore]["From"] == node:
-            end_signals.append(semaphore)
-    
-    return end_signals
+    for sig in signals:
+        if signals[sig]["From"] == node:
+            if signals[sig]["Way"] == signals[start_signal]["Way"]:
+                return sig
 
 # Find nodes with the same direction than the start semaphore
 def find_nodes(start_node,netPaths,semaphores):
