@@ -493,30 +493,6 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                         f.write(f'\t\tBranchCourse -> right -> {right[0]}\n')
         f.close()
 
-def detect_danger(file,nodes,netPaths,switchesIS,trainDetectionElements,bufferStops):
-    
-    #print(nodes)
-    
-    with open(file, "w") as f: 
-        f.write(f'Dangers> Switches:{len(switchesIS)}+Level crossings:NaN+Borders:NaN\n\n')
-        
-        semaphores = {}
-        
-        railJoint = create_railJoint(trainDetectionElements)
-        #print(railJoint)
-        
-        semaphores,switches_data = analyze_switches(nodes,netPaths,switchesIS,railJoint,semaphores)
-        #print(semaphores)
-        
-        for switch in switches_data:
-            f.write(f'Switch: {switch} @\n')
-            f.write(f'\tStart: {switches_data[switch]["Start"]} @ {nodes[switches_data[switch]["Start"]]["Begin"]}-{nodes[switches_data[switch]["Start"]]["End"]}\n')
-            f.write(f'\tContinue: {switches_data[switch]["Continue"]} @ {nodes[switches_data[switch]["Continue"]]["Begin"]}-{nodes[switches_data[switch]["Continue"]]["End"]}\n')
-            f.write(f'\tBranch: {switches_data[switch]["Branch"]} @ {nodes[switches_data[switch]["Branch"]]["Begin"]}-{nodes[switches_data[switch]["Branch"]]["End"]}\n')
-        f.close()
-        
-    return semaphores
-
 def analyze_switches(nodes,netPaths,switchesIS,railJoint,semaphores):
     switches_data = {}
     
@@ -843,103 +819,6 @@ def create_railJoint(trainDetectionElements):
                 railJoint[trainDetectionElements[joint]["Node"]]["Joint"].append(trainDetectionElements[joint]["Name"])
     return railJoint
 
-# Export semaphores to file and object
-def export_semaphores(file,semaphores,object):
-
-    with open(file, "w") as f: 
-        #print(semaphores)
-        for sig in semaphores:
-            f.write(f'{str(sig).zfill(2)}:\n')
-            f.write(f'\tNet: {semaphores[sig]["Net"]}\n')
-            f.write(f'\tSwitch: {semaphores[sig]["Switch"]}\n')
-            f.write(f'\tType: {semaphores[sig]["Type"]}\n')
-            f.write(f'\tDirection: {semaphores[sig]["Direction"]} \n')
-            f.write(f'\tPosition: {semaphores[sig]["Position"]}\n')
-        f.close()
-    
-    #print(semaphores)
-    
-    # Create que semaphore object
-    
-    # Create semaphore for FunctionalInfrastructure
-    if (object.Infrastructure.FunctionalInfrastructure.SignalsIS == None):
-        print(" No signals found --> Creating new signalling structure")
-        object.Infrastructure.FunctionalInfrastructure.create_SignalsIS()
-        if (object.Infrastructure.FunctionalInfrastructure.SignalsIS != None):
-            print(" Signals structure found!")    
-            for i in range(len(semaphores)):
-                object.Infrastructure.FunctionalInfrastructure.SignalsIS.create_SignalIS()
-                # Update the information
-                sem = object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i]
-                # Create atributes
-                sem.Id = list(semaphores)[i]                # Id
-                sem.IsSwitchable = "false"                   # IsSwitchable
-                # Create name
-                sem.create_Name()
-                sem.Name[0].Name = "S"+sem.Id[-2:]     # Name
-                sem.Name[0].Language = "en"                         # Language
-                # Create SpotLocation
-                sem.create_SpotLocation()
-                sem.SpotLocation[0].Id = sem.Id+"_sloc01"                      # Id="sig90_sloc01" 
-                sem.SpotLocation[0].NetElementRef = semaphores[sem.Id]["Net"]  # NetElementRef="ne15" 
-                direction = "normal" if semaphores[sem.Id]["Direction"] =="left" else "reverse"
-                sem.SpotLocation[0].ApplicationDirection  = direction                       # ApplicationDirection="normal" 
-                sem.SpotLocation[0].IntrinsicCoord = semaphores[sem.Id]["Coordinate"]                                # IntrinsicCoord 0 to 1 #TODO CALCULATE INTRINSIC COORDINATE
-                # Create Designator
-                sem.create_Designator()
-                sem.Designator[0].Register = "_Example"     # Register="_Example" 
-                sem.Designator[0].Entry = "SIGNAL S"+sem.Id[-2:]                                            # Entry="SIGNAL S07"
-                # Create SignalConstruction
-                sem.create_SignalConstruction() 
-                sem.SignalConstruction[0].Type = "light"               # Type
-                sem.SignalConstruction[0].PositionAtTrack = semaphores[sem.Id]["Direction"]    # PositionAtTrack
-                #print(object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS[i])
-        
-    # Create semaphore for InfrastructureVisualizations
-    if (object.Infrastructure.InfrastructureVisualizations.Visualization != None):
-        visualization_length = len(object.Infrastructure.InfrastructureVisualizations.Visualization[0].SpotElementProjection)
-        
-        for i in range(len(semaphores)):
-            sem = object.Infrastructure.InfrastructureVisualizations.Visualization[0]
-            # Add new SpotElementProjection
-            sem.create_SpotElementProjection()
-            # Create atributes
-            #print(list(semaphores)[i] )
-            #print(sem.SpotElementProjection[visualization_length+i].__dict__) 
-            sem.SpotElementProjection[visualization_length+i].RefersToElement = list(semaphores)[i] # TODO IF "sig" -> IT IS NOT PRINTED!
-            sem.SpotElementProjection[visualization_length+i].Id = "vis01_sep"+str(visualization_length+i+1)
-            # Create name
-            sem.SpotElementProjection[visualization_length+i].create_Name()
-            sem.SpotElementProjection[visualization_length+i].Name[0].Name = "S"+list(semaphores)[i][-2:]     # Name
-            sem.SpotElementProjection[visualization_length+i].Name[0].Language = "en"                         # Languag
-            # Create coordinate
-            sem.SpotElementProjection[visualization_length+i].create_Coordinate()
-            sem.SpotElementProjection[visualization_length+i].Coordinate[0].X = str(semaphores[list(semaphores)[i]]["Position"][0])
-            sem.SpotElementProjection[visualization_length+i].Coordinate[0].Y = str(semaphores[list(semaphores)[i]]["Position"][1])
-    
-    # Create semaphore for AssetsForIL
-    if (object.Interlocking.AssetsForIL != None):
-        # Create SignalsIL
-        AssetsForIL = object.Interlocking.AssetsForIL[0]
-        AssetsForIL.create_SignalsIL()
-        sem = AssetsForIL.SignalsIL
-        # Add new SignalIL for each semaphore
-        for i in range(len(semaphores)):
-            sem.create_SignalIL()
-            # Create atributes
-            sem.SignalIL[i].Id = "il_"+list(semaphores)[i]                # Id
-            sem.SignalIL[i].IsVirtual = "false"                           # IsVirtual
-            sem.SignalIL[i].ApproachSpeed = "0"                           # ApproachSpeed
-            sem.SignalIL[i].PassingSpeed = "0"                            # PassingSpeed
-            sem.SignalIL[i].ReleaseSpeed = "0"                            # ReleaseSpeed
-            # Create RefersTo
-            sem.SignalIL[i].create_RefersTo()
-            sem.SignalIL[i].RefersTo.Ref = list(semaphores)[i]            # RefersTo
-        
-        # Create Routes
-        AssetsForIL.create_Routes()
-        routes = AssetsForIL.Routes
-
 # Export routes to file and object
 def export_routes(file,routes,object):
     with open(file, "w") as f: 
@@ -1136,8 +1015,8 @@ def find_platforms_in_the_path(path,platforms):
     platform = []
     
     for i in platforms:
-        #print(i,switchesIS[i])
-        if platforms[i]['Node'] in path:
+        #print(i,platforms[i])
+        if platforms[i]['Net'] in path:
             platform.append(i)
     
     return platform
@@ -1389,11 +1268,9 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
     # Find every switch in the network
     for switch in switchesIS:
         sw_info = switchesIS[switch]
-        
         start_node = nodeSwitch[switch]["Start"]
         continue_node = nodeSwitch[switch]["Continue"]
         branch_node = nodeSwitch[switch]["Branch"]
-        
         print(f'  {switch} : [{start_node}|{continue_node}|{branch_node}]')
         
         # For continue course
@@ -1405,7 +1282,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             signal_type = "Manouver"
             print(f'    {switch} -> {next_switch} @ {next_node}')
         continue_node = next_node
-        
         if continue_node in signal_placement:
             
             atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
@@ -1443,7 +1319,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         
         # For start course
         # Circulation
-        
+
         # If start is also a branch, don't add signal
         if start_node in signal_placement:
             sig_number = "sig"+str(len(signals)+1).zfill(2)
@@ -1453,9 +1329,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             pos = sw_info["Position"]
             side = "Next" if "Next" in netPaths[start_node] else "Prev"
             position = closest_safe_point(signal_placement[start_node][side],pos,side)
-            
             direction = "normal" if position[0] < pos[0] else "reverse"
-            
             name = "S"+str(len(signals)+1).zfill(2)
             
             signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
@@ -1497,25 +1371,26 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
+
         position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
         name = "J"+str(len(signals)+1).zfill(2)
-        
+
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
-        
+
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
         position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
         name = "J"+str(len(signals)+1).zfill(2)
-        
+
         # If the safe position is far away, avoid the signal
         #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
-        
+            
     return signals
 
 # Find signals for level crossings
@@ -1585,23 +1460,29 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
 def closest_safe_point(safe_points,position,direction,test=False):
     closest = []
     distance = []
-    
+
     for safe_point in safe_points:
         distance.append(abs(position[0]-safe_point[0]))
-    
+
     index = distance.index(min(distance))
     closest = safe_points[index]
-    
+
     if test:
         print("**",safe_points,position,direction,closest)
         
     if (direction == "Next" and position[0] < closest[0]):
         #print("LEFT")
-        closest = safe_points[index+1]
+        if index+1 in safe_points:
+            closest = safe_points[index+1]
+        else:
+            closest = safe_points[index]
     if (direction == "Prev" and position[0] > closest[0]):
         #print("RIGHT")
-        closest = safe_points[index-1]
-    
+        if index-1 in safe_points:
+            closest = safe_points[index-1]
+        else:
+            closest = safe_points[index]
+
     if test:
         print("$$",safe_points,position,direction,closest)
         
@@ -2085,11 +1966,7 @@ def analyzing_object(object):
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
     move_signals(signals,False)
     find_way(signals,nodes)
-    
     export_signal("F:\PhD\RailML\\Signalling.RNA",signals,object)
-
-    #semaphores = detect_danger("F:\PhD\RailML\\Dangers.RNA",nodes,netPaths,switchesIS,trainDetectionElements,bufferStops)
-    #export_semaphores("F:\PhD\RailML\\Signalling.RNA",semaphores,object)
     
     print(" Detecting Routes --> Routes.RNA")
     routes = detect_routes(signals,netPaths,switchesIS,platforms)
