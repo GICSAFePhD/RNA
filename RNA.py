@@ -3,6 +3,7 @@ from lib2to3.pytree import Node
 from os import execlp, startfile
 from posixpath import pathsep
 from re import L, S
+import sys
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
@@ -31,8 +32,6 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
     analyzing_object(RML)
     
     # Create new signalling
-    
-    
     if test:
         print("Exporting .railML file")
     with open(OUTPUT_FILE, "w" , encoding="utf-8") as f:        
@@ -42,6 +41,12 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         save_xml(RML,f,ignore = {None}, test = False)
         
         f.close()
+
+def sizeof(obj):
+    size = sys.getsizeof(obj)
+    if isinstance(obj, dict): return size + sum(map(sizeof, obj.keys())) + sum(map(sizeof, obj.values()))
+    if isinstance(obj, (list, tuple, set, frozenset)): return size + sum(map(sizeof, obj))
+    return size
 #%%
 def add_sections(graph,node,zones):
     zones_number = len(zones)
@@ -56,6 +61,7 @@ def analyze_connectedness(neighbours):
     zones = {}
     zones_number = len(zones)
 
+    print("ACA")
     for node in neighbours:
         if zones_number == 0:
             zones_number = add_sections(neighbours,node,zones)
@@ -100,7 +106,7 @@ def analyzing_graph(netElements,netRelations):
     netPaths = get_relations(nodes,netRelations)
     neighbours,switches = get_neighbours_and_switches(nodes,netElements) 
     limits = get_limits(switches)
-    
+
     x = '' if (analyze_connectedness(neighbours)) else ('not ')
     print(f' The network is {x}connected')
 
@@ -108,15 +114,18 @@ def analyzing_graph(netElements,netRelations):
 #%%%   
 def get_nodes(netElements):
     nodes = {}
-
     if netElements != None:
-        
         for i in netElements.NetElement:
+            #print(i)
             if i.Id not in nodes.keys():
                 #print([[i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4],i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4]] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))])
-                nodes[i.Id] = {"Begin":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].Y[:-4])],
-                            "End":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].Y[:-4])],
-                            "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1,"All":[[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4])] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))]}
+                if i.AssociatedPositioningSystem != None:
+                    if i.AssociatedPositioningSystem[0].IntrinsicCoordinate != None:
+                        #print(i.Id,len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate),i.AssociatedPositioningSystem[0].IntrinsicCoordinate)
+                        if len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate) > 1 and i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate != None:
+                            nodes[i.Id] = {"Begin":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[0].GeometricCoordinate[0].Y[:-4])],
+                                        "End":[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[-1].GeometricCoordinate[0].Y[:-4])],
+                                        "Lines":len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate)-1,"All":[[int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].X[:-4]),-int(i.AssociatedPositioningSystem[0].IntrinsicCoordinate[j].GeometricCoordinate[0].Y[:-4])] for j in range(len(i.AssociatedPositioningSystem[0].IntrinsicCoordinate))]}
     return nodes  
 
 def get_relations(nodes,netRelations):
@@ -124,13 +133,17 @@ def get_relations(nodes,netRelations):
     
     for netRelation in netRelations:
         [begin_net, end_net, name] = identify_relations(netRelation.Id)
+        #print(netRelation.Id,begin_net, end_net, name)
         
+        if begin_net[2].isalpha():
+                continue
+            
         if netRelation.Navigability == "Both":
             if begin_net not in netPaths:
                 netPaths[begin_net] = {"Prev":[],"Next":[]}
             if end_net not in netPaths:
                 netPaths[end_net] = {"Prev":[],"Next":[]}
-        
+
             if nodes[begin_net]["Begin"][0] < nodes[end_net]["Begin"][0]:
                 if end_net not in netPaths[begin_net]["Next"]:
                     netPaths[begin_net]["Next"].append(end_net)
@@ -162,6 +175,8 @@ def get_neighbours_and_switches(nodes,netElements):
         #print(netElement.AssociatedPositioningSystem)
         if netElement.Relation != None:
             for i in netElement.Relation:
+                
+                #TODO HERE
                 
                 if (not netElement.Id[2].isdigit()): 
                     continue
@@ -201,18 +216,24 @@ def get_limits(switches):
 def identify_relations(reference):
     begin = end = name = ""
 
-    reference = reference.replace('nr_','')
-    begin = reference[0:reference[1:].find('ne')+1]
-    reference = reference.replace(begin,'')
-    end = reference[0:reference[1:].find('_')+1]
-    name = reference.replace(end+'_','')
+    #print("R0:",reference)
+    split_reference = reference.split('_')
+    #print("[R]:",split_reference)
+    
+    if split_reference[1].count("ne") == 2:
+        begin = split_reference[1][0:split_reference[1][1:].find('ne')+1]
+        end = split_reference[1][len(begin):]
+        name = split_reference[2]
+    else:
+        begin = split_reference[1]
+        end = split_reference[2]
+    
+    #print([begin,end,name])
 
     return [begin,end,name]
 
 def detect_nodes(topology):
     nodes = {}
-    
-    #return nodes 
     
     if topology.NetElements != None:
     
@@ -1938,6 +1959,41 @@ def move_signals(signals,moving=True):
         
         for delete_signal in delete:
             del signals[delete_signal]
+
+def print_net(netElements):
+    
+    x = 0
+    for i in netElements.NetElement:
+        x += 1
+        print(x,i)
+        if x >= 59:
+            #print(i.__dict__)
+            print(i.Id)
+    print("-------------------")
+    x = 0
+    for i in netElements.NetElement:
+        x += 1
+        if x >= 0:
+            print(f'{x} : Id = "{i.Id}"')
+            
+            if i.Relation != None:
+                for j in i.Relation:
+                    print(f'\tRelation: Ref = "{j.Ref}"')
+            if i.ElementCollectionUnordered != None:
+                for j in i.ElementCollectionUnordered:
+                    print(f'\tElementCollectionUnordered: Id = "{j.Id}"')
+                    for k in j.ElementPart:
+                        print(f'\t\tElementPart: Ref = "{k.Ref}"')
+            #continue
+            if i.AssociatedPositioningSystem != None:
+                for j in i.AssociatedPositioningSystem:
+                    print(f'\tAssociatedPositioningSystem: Id = "{j.Id}"')
+                    for k in j.IntrinsicCoordinate:
+                        print(f'\t\tIntrinsicCoordinate: Id = "{k.Id}" | intrinsicCoord = "{k.IntrinsicCoord}"')
+                        if k.GeometricCoordinate != None:
+                            for l in k.GeometricCoordinate:
+                                print(f'\t\t\t GeometricCoordinate: PositioningSystemRef = "{l.PositioningSystemRef}" X = "{l.X}" Y = "{l.Y}"')
+
 ##%%%
 def analyzing_object(object):
     topology = object.Infrastructure.Topology
@@ -1947,6 +2003,7 @@ def analyzing_object(object):
     visualization = object.Infrastructure.InfrastructureVisualizations
     
     print(" Analyzing graph")
+    #print_net(netElements)
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
     
     print(" Analyzing infrastructure --> Infrastructure.RNA")
@@ -1971,5 +2028,7 @@ def analyzing_object(object):
     print(" Detecting Routes --> Routes.RNA")
     routes = detect_routes(signals,netPaths,switchesIS,platforms)
     export_routes("F:\PhD\RailML\\Routes.RNA",routes,object)
+    
+    print(f'RML object\'s size: {sizeof(object)} Bytes')
 # %%
 #
