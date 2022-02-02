@@ -4,6 +4,7 @@ from os import execlp, startfile
 from posixpath import pathsep
 from re import L, S
 import sys
+from collections import defaultdict
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
@@ -56,48 +57,42 @@ def add_sections(graph,node,zones):
     zones[zones_number].extend(graph[node])
     
     return zones_number
+
+# Merge function to  merge all sublist having common elements.
+def merge_common(lists):
+    neigh = defaultdict(set)
+    visited = set()
+    for each in lists:
+        for item in each:
+            neigh[item].update(each)
+    def comp(node, neigh = neigh, visited = visited, vis = visited.add):
+        nodes = set([node])
+        next_node = nodes.pop
+        while nodes:
+            node = next_node()
+            vis(node)
+            nodes |= neigh[node] - visited
+            yield node
+    for node in neigh:
+        if node not in visited:
+            yield sorted(comp(node))
 #%%%
 def analyze_connectedness(neighbours):
-    zones = {}
-    zones_number = len(zones)
+    zones = [] 
+    #print("ACA",neighbours)
 
-    print("ACA")
     for node in neighbours:
-        if zones_number == 0:
-            zones_number = add_sections(neighbours,node,zones)
-        #print(f'Node:{node}|{neighbours[node]}')
-        
-        for zone in zones:
-            new_zone = True
-            #print(f'Zone_{zone}:{zones[zone]}')
-            
-            if node in zones[zone]:
-                new_zone = False
-                zones[zone].extend([x for x in neighbours[node] if (x not in zones[zone])])
-                continue
-            
-            if list(set(neighbours[node]) & set(zones[zone])):
-                zones[zones_number].append(node)
-                zones[zones_number].extend([x for x in neighbours[node] if (x not in zones[zone])])
-                new_zone = False
-        
-        if new_zone: 
-            zones_number = add_sections(neighbours,node,zones)
-        #print(f'Zones:{zones}')
+        zones.append([node,*neighbours[node]])
+    #print(zones)
     
-    # Combine zones with common nodes
-    for zone in range(1,len(zones)+1):
-        if zone+1 <= len(zones):
-            if list(set(zones[zone]) & set(zones[zone+1])):
-                zones[zone].extend([x for x in zones[zone+1] if (x not in zones[zone])])
-                del zones[zone+1]
+    output = list(merge_common(zones))
+    #print(output)
     
-    #print(f' Zones:{zones}')
-    
-    if len(zones) > 1:
+    if len(output) > 1:
         return False
     else:
         return True
+
 #%%%
 def analyzing_graph(netElements,netRelations):
     
@@ -347,20 +342,23 @@ def detect_signalsIS(infrastructure):
 
 def detect_switchesIS(infrastructure,visualization):
     switchesIS = {}
-
+    print("ACA")
     if infrastructure.SwitchesIS != None:
         for i in infrastructure.SwitchesIS[0].SwitchIS:
             if i.Id not in switchesIS.keys():
+                print(i.Name[0].Name,i.SpotLocation[0].NetElementRef)
                 switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
                                             "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
                                             "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef
                                             }
+    print("ACA 2")
     
     if visualization.Visualization != None:
         for i in  visualization.Visualization[0].SpotElementProjection:
             if "Sw" in i.Name[0].Name:
                 switchesIS[i.Name[0].Name] |= {"Position":[int(i.Coordinate[0].X[:-4]),-int(i.Coordinate[0].Y[:-4])]}
 
+    print("ACA 3")
     return switchesIS
 
 def detect_tracks(infrastructure):
@@ -409,32 +407,68 @@ def analyzing_infrastructure(infrastructure,visualization):
         bufferStops = {}
         
     # derailersIS
-    derailersIS = detect_derailersIS(infrastructure)
-    
+    try:
+        derailersIS = detect_derailersIS(infrastructure)
+    except:
+        print("Error with derailersIS")
+        bufferStops = {}
+        
     # levelCrossingsIS
-    levelCrossingsIS = detect_levelCrossingsIS(infrastructure,visualization)
-    
+    try:
+        levelCrossingsIS = detect_levelCrossingsIS(infrastructure,visualization)
+    except:
+        print("Error with levelCrossingsIS")
+        bufferStops = {}
+        
     # lines
-    lines = detect_lines(infrastructure)
-    
+    try:
+        lines = detect_lines(infrastructure)
+    except:
+        print("Error with lines")
+        bufferStops = {}
+        
     # operationalPoints
-    operationalPoints = detect_operationalPoints(infrastructure)    # TODO FOR MESO
-    
+    try:
+        operationalPoints = detect_operationalPoints(infrastructure)    # TODO FOR MESO
+    except:
+        print("Error with operationalPoints")
+        bufferStops = {}
+        
     # platforms
-    platforms = detect_platforms(infrastructure,visualization)
-    
+    try:
+        platforms = detect_platforms(infrastructure,visualization)
+    except:
+        print("Error with platforms")
+        bufferStops = {}
+        
     # signalsIS
-    signalsIS = detect_signalsIS(infrastructure)
-    
+    try:
+        signalsIS = detect_signalsIS(infrastructure)
+    except:
+        print("Error with signalsIS")
+        bufferStops = {}
+        
     # switchesIS
-    switchesIS = detect_switchesIS(infrastructure,visualization)
-    
+    try:
+        switchesIS = detect_switchesIS(infrastructure,visualization)
+    except:
+        print("Error with switchesIS")
+        bufferStops = {}
+        
     # tracks
-    tracks = detect_tracks(infrastructure)
-    
+    try:
+        tracks = detect_tracks(infrastructure)
+    except:
+        print("Error with tracks")
+        bufferStops = {}
+        
     # trainDetectionElements
-    trainDetectionElements = detect_trainDetectionElements(infrastructure,visualization)
-
+    try:
+        trainDetectionElements = detect_trainDetectionElements(infrastructure,visualization)
+    except:
+        print("Error with trainDetectionElements")
+        bufferStops = {}
+        
     return borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements
 #%%%
 def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements):
