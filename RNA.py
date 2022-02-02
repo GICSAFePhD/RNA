@@ -342,23 +342,36 @@ def detect_signalsIS(infrastructure):
 
 def detect_switchesIS(infrastructure,visualization):
     switchesIS = {}
-    print("ACA")
     if infrastructure.SwitchesIS != None:
         for i in infrastructure.SwitchesIS[0].SwitchIS:
             if i.Id not in switchesIS.keys():
-                print(i.Name[0].Name,i.SpotLocation[0].NetElementRef)
-                switchesIS[i.Name[0].Name] = {"Node":i.SpotLocation[0].NetElementRef,"ContinueCourse":i.ContinueCourse,
-                                            "BranchCourse":i.BranchCourse,"Direction":i.SpotLocation[0].ApplicationDirection,
-                                            "LeftBranch":i.LeftBranch[0].NetRelationRef,"RightBranch":i.RightBranch[0].NetRelationRef
-                                            }
-    print("ACA 2")
+                sw_name = i.Name[0].Name
+                node = i.SpotLocation[0].NetElementRef
+                type = i.Type
+                direction = i.SpotLocation[0].ApplicationDirection
+                
+                #print(sw_name,type)
+                if type == "ordinarySwitch":    # TODO: Add doubleSwitchCrossing types!
+                    continueCourse = i.ContinueCourse
+                    branchCourse = i.BranchCourse
+                    leftBranch = i.LeftBranch[0].NetRelationRef
+                    rightBranch = i.RightBranch[0].NetRelationRef
+                
+                    #print(f'{sw_name}[{node}] : {continueCourse}|{branchCourse} : {direction} : {leftBranch}|{rightBranch}')
+                
+                    switchesIS[sw_name] = {"Node":node,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                                        "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch
+                                        }
     
     if visualization.Visualization != None:
         for i in  visualization.Visualization[0].SpotElementProjection:
             if "Sw" in i.Name[0].Name:
-                switchesIS[i.Name[0].Name] |= {"Position":[int(i.Coordinate[0].X[:-4]),-int(i.Coordinate[0].Y[:-4])]}
+                sw_name = i.Name[0].Name
+                pos_x = int(i.Coordinate[0].X[:-4])
+                pos_y = -int(i.Coordinate[0].Y[:-4])
+                if sw_name in switchesIS:
+                    switchesIS[sw_name] |= {"Position":[pos_x,pos_y]}
 
-    print("ACA 3")
     return switchesIS
 
 def detect_tracks(infrastructure):
