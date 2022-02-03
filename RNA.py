@@ -1820,7 +1820,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
         if nodes[node]["Lines"] > 1:
             all_points = nodes[node]["All"]
             curve_positions  = all_points[1:-1]
-            print(f'  {node} has a curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
+            print(f'  {node} has a Curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
 
             # Find orientation of the curve
             orientation = []
@@ -1875,7 +1875,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 x_middle_point = (nodes[node]["Begin"][0]+nodes[node]["End"][0]) / 2
                 y_coordinate = nodes[node]["Begin"][1]
                 
-                print(f'  {node} has a middle point @ {[x_middle_point,y_coordinate]}')
+                print(f'  {node} has a Middle point @ {[x_middle_point,y_coordinate]}')
                 
                 # next_position
                 next_place = signal_placement[node]["Next"]
@@ -1890,10 +1890,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 
                 signal_placement[node]["Next"].append(next_place)
                 signal_placement[node]["Prev"].append(prev_place)
-    
+        
     # Simplify closest signal placements
     signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node)
-
+    
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
@@ -1907,12 +1907,16 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node):
     distance = 100
     #print(signal_placement)
+    #print(crossing_nodes)
+    #print(platforms_node)
     for node in signal_placement:
         old_next = signal_placement[node]["Next"]
         old_prev = signal_placement[node]["Prev"]
         n_p_next = old_next
         n_p_prev = old_prev
 
+        #print(node,n_p_next,n_p_prev)
+        
         for n in old_next:
             for p in old_prev:
                 #print(node,old_next,old_prev)
@@ -1920,10 +1924,13 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
                     continue
                 #print(n,p,abs(n[0]-p[0]),distance,abs(n[0]-p[0]) < distance)
                 if abs(n[0]-p[0]) < distance:
-                    #print(node,n,p)
-                    crossing_pos = crossing_nodes[node]["Position"][0]
-                    platform_pos = platforms_node[node]["Position"][0]
-                    #print(crossing_pos,platform_pos)
+                    print(node,n,p)
+                    if node in crossing_nodes and node in platforms_node:
+                        crossing_pos = crossing_nodes[node]["Position"][0]
+                        platform_pos = platforms_node[node]["Position"][0]
+                    else:
+                        continue
+                    print(node,crossing_pos,platform_pos)
                     
                     if (platform_pos < n[0] < crossing_pos or crossing_pos < n[0] < platform_pos) and (platform_pos < p[0] < crossing_pos or crossing_pos < p[0] < platform_pos):
                         continue
