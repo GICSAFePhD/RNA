@@ -1397,7 +1397,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         
         # For start course
         # Circulation
-
+        
         # If start is also a branch, don't add signal
         if start_node in signal_placement:
             sig_number = "sig"+str(len(signals)+1).zfill(2)
@@ -1405,11 +1405,11 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             #direction = "normal" if "Next" in netPaths[start_node] else "reverse"
             atTrack = "left" if "Next" in netPaths[start_node] else "right"
             pos = sw_info["Position"]
-            side = "Next" if "Next" in netPaths[start_node] else "Prev"
+            side = "Next" if "Next" in signal_placement[start_node] else "Prev" # Changed NetPaths for signal_placement
+            
             position = closest_safe_point(signal_placement[start_node][side],pos,side)
             direction = "normal" if position[0] < pos[0] else "reverse"
             name = "S"+str(len(signals)+1).zfill(2)
-            
             signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
             
@@ -2102,7 +2102,7 @@ def analyzing_object(object):
     find_way(signals,nodes)
     # Reduce redundant signals
     print(" Reducing redundant signals")
-    reduce_signals(signals,signal_placement)
+    #reduce_signals(signals,signal_placement)
     
     move_signals(signals,False)
     
