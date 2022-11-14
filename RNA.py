@@ -249,7 +249,7 @@ def detect_nodes(topology):
     
     return nodes 
     
-def detect_borders(infrastructure):
+def detect_borders(infrastructure,visualization):
     borders = {}
     
     #return borders 
@@ -257,8 +257,14 @@ def detect_borders(infrastructure):
     if infrastructure.Borders != None:
         for i in infrastructure.Borders[0].Border:
             if i.Id not in borders.keys():
-                borders[i.Id] = {"Node":i.SpotLocation[0].NetElementRef,"IsOpenEnd":i.IsOpenEnd,"Type":i.Type}
-    
+                borders[i.SpotLocation[0].NetElementRef] = {"LineBorder":i.Id,"IsOpenEnd":i.IsOpenEnd,"Type":i.Type,"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
+    if visualization.Visualization[0].SpotElementProjection != None:
+        for i in visualization.Visualization[0].SpotElementProjection:
+            if "oe" in i.RefersToElement:
+                for node in borders.keys():
+                    if borders[node]['LineBorder'] == i.RefersToElement:
+                        borders[node] |= {"Position":[int(i.Coordinate[0].X[:-4]),-int(i.Coordinate[0].Y[:-4])]}
+    print(borders)
     return borders 
 
 def detect_bufferStops(infrastructure):
@@ -420,7 +426,7 @@ def detect_trainDetectionElements(infrastructure,visualization):
 def analyzing_infrastructure(infrastructure,visualization):
     # borders
     try:
-        borders = detect_borders(infrastructure)
+        borders = detect_borders(infrastructure,visualization)
     except:
         print("Error with borders")
         borders = {}
@@ -528,7 +534,7 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
                     f.write(f'\t\t Side -> {derailersIS[i]["Side"]}\n')
             
             for j in borders:
-                if i == borders[j]["Node"]:
+                if i == borders[j]["LineBorder"]:
                     f.write(f'\tType = Border -> {j}\n')
                     f.write(f'\t\tType -> {borders[j]["Type"]}\n')
                     f.write(f'\t\tIsOpenEnd -> {borders[j]["IsOpenEnd"]}\n')
@@ -1254,7 +1260,7 @@ def find_node_roles(switchesIS):
     return nodeRole,nodeSwitch 
 
 # Find signals for every node in the network
-def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms):
     signals = {}
     printed_signals = []
 
@@ -1270,6 +1276,12 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     if printed_signals:
         print(f' Creating signals for bufferstops:{printed_signals}')
     
+    # Find signals for lineborders
+    signals = find_signals_lineborders(netPaths,nodes,borders,signals)
+    printed_signals = [*signals]
+    if [*signals] != printed_signals:
+        print(f' Creating signals for lineborders:{printed_signals}')
+
     # Find signals for railJoints
     #signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals)
     #if [*signals] != printed_signals:
@@ -1333,15 +1345,74 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                 #print(node,position_index,position)
                 name = "T"+str(len(signals)+1).zfill(2)
                 signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
-                print(sig_number,signals[sig_number])
+                #print(sig_number,signals[sig_number])
 
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 name = "T"+str(len(signals)+1).zfill(2)
                 atTrack = "right" if bufferStops[node][i]["Direction"] == "normal" else "left"
                 direction = "reverse" if bufferStops[node][i]["Direction"] == "normal" else "normal"
                 signals[sig_number] = {"From":node,"To":node,"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
-                print(sig_number,signals[sig_number])
+                #print(sig_number,signals[sig_number])
     return signals
+
+# Find signals for lineborders
+def find_signals_lineborders(netPaths,nodes,borders,signals):
+    step = 100
+    #print(borders)
+    # Find every end of the network
+    for node in nodes:
+        # If the node is a lineborder:
+        if node in borders:
+            #for i in range(len(borders[node])):
+            print(netPaths[node])
+            # Add circulation signal with the direction of the exit
+            if node in netPaths:
+                side = "Prev" if "Next" in netPaths[node] else "Next"
+                position_index = "Begin" if "Next" in netPaths[node] else "End"
+            #else:
+            #    position_index = "Begin" if i == 0 else "End"
+            
+            sig_number = "sig"+str(len(signals)+1).zfill(2)
+            
+            if side == "prev":
+                if borders[node]['Inverter']:
+                    atTrack = "right"
+                else:
+                    atTrack = "left"
+            else:
+                if borders[node]['Inverter']:
+                    atTrack = "left"
+                else:
+                    atTrack = "right"
+
+            #atTrack = "left" if side == "prev" else "right"
+            
+            if side == "prev":
+                if borders[node]['Inverter']:
+                    direction = "reverse"
+                else:
+                    direction = "normal"
+            else:
+                if borders[node]['Inverter']:
+                    direction = "normal"
+                else:
+                    direction = "reverse"
+
+            #print(node,netPaths[node],side,direction,nodes[node])
+            
+            if position_index == "End":
+                position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
+            else:
+                position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
+                
+            #print(node,position_index,position)
+            name = "L"+str(len(signals)+1).zfill(2)
+            signals[sig_number] = {"From":node,"To":borders[node]["LineBorder"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
+            print(sig_number,signals[sig_number])
+    return signals
+
+
+
 
 # Find signals for switches
 def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
@@ -2105,7 +2176,7 @@ def analyzing_object(object):
     #print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
     signals_file = "C:\PhD\RailML\\Dangers.RNA"
-    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms)
     
     find_way(signals,nodes)
     # Reduce redundant signals
