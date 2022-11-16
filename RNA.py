@@ -249,7 +249,7 @@ def detect_nodes(topology):
     
     return nodes 
     
-def detect_borders(infrastructure,visualization):
+def detect_borders(infrastructure,visualization,nodes):
     borders = {}
     
     #return borders 
@@ -258,6 +258,7 @@ def detect_borders(infrastructure,visualization):
         for i in infrastructure.Borders[0].Border:
             if i.Id not in borders.keys():
                 borders[i.SpotLocation[0].NetElementRef] = {"LineBorder":i.Id,"IsOpenEnd":i.IsOpenEnd,"Type":i.Type,"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
+                nodes[i.SpotLocation[0].NetElementRef] |= {"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
     if visualization.Visualization[0].SpotElementProjection != None:
         for i in visualization.Visualization[0].SpotElementProjection:
             if "oe" in i.RefersToElement:
@@ -423,10 +424,10 @@ def detect_trainDetectionElements(infrastructure,visualization):
     #print(trainDetectionElements)
     return trainDetectionElements
 
-def analyzing_infrastructure(infrastructure,visualization):
+def analyzing_infrastructure(infrastructure,visualization,nodes):
     # borders
     try:
-        borders = detect_borders(infrastructure,visualization)
+        borders = detect_borders(infrastructure,visualization,nodes)
     except:
         print("Error with borders")
         borders = {}
@@ -1364,7 +1365,7 @@ def find_signals_lineborders(netPaths,nodes,borders,signals):
         # If the node is a lineborder:
         if node in borders:
             #for i in range(len(borders[node])):
-            print(netPaths[node])
+            #print(netPaths[node])
             # Add circulation signal with the direction of the exit
             if node in netPaths:
                 side = "Prev" if "Next" in netPaths[node] else "Next"
@@ -1408,11 +1409,8 @@ def find_signals_lineborders(netPaths,nodes,borders,signals):
             #print(node,position_index,position)
             name = "L"+str(len(signals)+1).zfill(2)
             signals[sig_number] = {"From":node,"To":borders[node]["LineBorder"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
-            print(sig_number,signals[sig_number])
+            #print(sig_number,signals[sig_number])
     return signals
-
-
-
 
 # Find signals for switches
 def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
@@ -1556,28 +1554,57 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
     distance = 250
     # Find every level crossing on the network
     for crossing in levelCrossingsIS:
+        #print(levelCrossingsIS[crossing])
         node = levelCrossingsIS[crossing]["Net"] 
+        #print(nodes[node])
         pos = levelCrossingsIS[crossing]["Position"]
         # Add an entrance signal and an exit signal
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "normal"
         atTrack = "left"
-        position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
+
+        if nodes[node]['Inverter']:
+            #atTrack = "left"
+            #direction = "reverse"
+            neighbor = "Prev"
+        else:
+            #atTrack = "left"
+            #direction = "normal"
+            neighbor = "Next"
+
+        position = closest_safe_point(signal_placement[node][neighbor],pos,neighbor)
+
+        if nodes[node]['Inverter']:
+            position[0] = position[0] + distance * 0.4
+
         name = "X"+str(len(signals)+1).zfill(2)
         
         # If the safe position is far away, avoid the signal
-        #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
+        print(f'OBJ:{sig_number} | {pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_right","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
         
-        sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
+
+        sig_number = "sig"+str(len(signals)+1).zfill(2)
+        if not nodes[node]['Inverter']:
+            #atTrack = "right"
+            #direction = "reverse"
+            neighbor = "Prev"
+        else:
+            #atTrack = "right"
+            #direction = "normal"
+            neighbor = "Next"
+            
+        position = closest_safe_point(signal_placement[node][neighbor],pos,neighbor)
         
+        if nodes[node]['Inverter']:
+            position[0] = position[0] + distance * 0.4
+            
         name = "X"+str(len(signals)+1).zfill(2)
         # If the safe position is far away, avoid the signal
-        #print(f'OBJ:{pos} | {position} | d {position[0]-pos[0]}')
+        print(f'OBJ:{sig_number} | {pos} | {position} | d {position[0]-pos[0]}')
         if (abs(position[0]-pos[0]) < distance):
             signals[sig_number] = {"From":node,"To":node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             
@@ -2163,7 +2190,7 @@ def analyzing_object(object):
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
     
     print(" Analyzing infrastructure --> Infrastructure.RNA")
-    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization)
+    borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization,nodes)
     
     infrastructure_file = "C:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
