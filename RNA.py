@@ -9,7 +9,7 @@ from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
 #%%%
-def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
+def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,1]):
     
     if test:
         print("#"*20+" Starting Railway Network Analyzer "+"#"*20)
@@ -33,7 +33,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
     
     if test:
         print("Analyzing railML object")
-    analyzing_object(RML)
+    x = analyzing_object(RML,config)
     
     # Create new signalling
     
@@ -45,6 +45,8 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False):
         save_xml(RML,f,ignore = {None}, test = False)
         
         f.close()
+
+    return x
 
 def delete_signal_visual(object):
     
@@ -258,7 +260,7 @@ def detect_borders(infrastructure,visualization,nodes):
         for i in infrastructure.Borders[0].Border:
             if i.Id not in borders.keys():
                 borders[i.SpotLocation[0].NetElementRef] = {"LineBorder":i.Id,"IsOpenEnd":i.IsOpenEnd,"Type":i.Type,"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
-                nodes[i.SpotLocation[0].NetElementRef] |= {"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
+                #nodes[i.SpotLocation[0].NetElementRef] |= {"Inverter":True if i.SpotLocation[0].IntrinsicCoord == "1.0000" else False}
     if visualization.Visualization[0].SpotElementProjection != None:
         for i in visualization.Visualization[0].SpotElementProjection:
             if "oe" in i.RefersToElement:
@@ -356,6 +358,7 @@ def detect_signalsIS(infrastructure):
     return signalsIS
 
 def detect_switchesIS(infrastructure,visualization,nodes):
+    
     switchesIS = {}
     if infrastructure.SwitchesIS != None:
         for i in infrastructure.SwitchesIS[0].SwitchIS:
@@ -380,7 +383,7 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                     switchesIS[sw_name] = {"Node":node,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
                                         "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch
                                         }
-    
+
     if visualization.Visualization != None:
         for i in  visualization.Visualization[0].SpotElementProjection:
             if "sw" in i.RefersToElement:
@@ -389,8 +392,8 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                 pos_y = -int(i.Coordinate[0].Y[:-4])
                 if sw_name in switchesIS: #ACA , ID NO ES LO MISMO QUE NAME
                     switchesIS[sw_name] |= {"Position":[pos_x,pos_y]}
-                    if ( pos_x == nodes[switchesIS[sw_name]["Node"]]["Begin"][0] and pos_y == nodes[switchesIS[sw_name]["Node"]]["Begin"][1]):
-                        nodes[switchesIS[sw_name]["Node"]]["Inverter"] = True
+                    #if ( pos_x == nodes[switchesIS[sw_name]["Node"]]["Begin"][0]) and pos_y == nodes[switchesIS[sw_name]["Node"]]["Begin"][1]):
+                    #    nodes[switchesIS[sw_name]["Node"]]["Inverter"] = True
 
     return switchesIS
 
@@ -485,7 +488,7 @@ def analyzing_infrastructure(infrastructure,visualization,nodes):
     except:
         print("Error with signalsIS")
         signalsIS = {}
-        
+
     # switchesIS
     try:
         switchesIS = detect_switchesIS(infrastructure,visualization,nodes)
@@ -1039,16 +1042,15 @@ def detect_routes(signals,netPaths,switchesIS,platforms):
     for sig in signals:
         #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
         # Find the start semaphore with director + start node
+        
         if signals[sig]["Name"][0] != "T":
             start_signal = sig
             start_node = signals[sig]["From"]
             way = signals[sig]["Way"]
-            
             # Find all the next nodes
             end_nodes = []
             end_nodes = find_next_nodes(start_node,way,signals_in_node,netPaths,end_nodes)
             paths = find_path_between_nodes(start_node,end_nodes,netPaths,way)
-            
             for node in range(len(end_nodes)): 
                 # Find all the semaphores at the nodes with the same direction than the start semaphore
                 end_signal = find_semaphores(end_nodes[node],start_signal,signals)
@@ -1131,8 +1133,8 @@ def find_next_nodes(start_node,way,semaphores_in_node,netPaths,end_nodes = []):
     #end_nodes = []
 
     direction = "Next" if way == ">>" else "Prev"
-    
-    if direction in netPaths[start_node]:   # There is a next/prev node
+
+    if start_node in netPaths and direction in netPaths[start_node]:   # There is a next/prev node
         #print(f'{start_node} has a {direction} node')
         
         # Check ALL the next/prev nodes
@@ -1266,51 +1268,65 @@ def find_node_roles(switchesIS):
     return nodeRole,nodeSwitch 
 
 # Find signals for every node in the network
-def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms):
+def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config = [1,1,1,1,1,1]):
+    
     signals = {}
     printed_signals = []
 
     # Find the use of each node
     nodeRole,nodeSwitch = find_node_roles(switchesIS)
-    
+
+    # Adapting levelCrossings to be node friendly
+    crossing_nodes = {}
+    for crossing in levelCrossingsIS:
+        if levelCrossingsIS[crossing]["Net"] not in crossing_nodes:
+            crossing_nodes[levelCrossingsIS[crossing]["Net"]] = []
+        crossing_nodes[levelCrossingsIS[crossing]["Net"]].append({"Id":crossing,"Position":levelCrossingsIS[crossing]["Position"],"Coordinate":levelCrossingsIS[crossing]["Coordinate"]})
+
     # Find depth of branches
     branch_depth(nodes,switchesIS,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms)
 
     # Find signals for bufferStops
-    signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
-    printed_signals = [*signals]
-    if printed_signals:
-        print(f' Creating signals for bufferstops:{printed_signals}')
+    if(config[0]==1):
+        signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
+        printed_signals = [*signals]
+        if printed_signals:
+            print(f' Creating signals for bufferstops:{printed_signals}')
     
     # Find signals for lineborders
-    signals = find_signals_lineborders(netPaths,nodes,borders,signals)
-    printed_signals = [*signals]
-    if [*signals] != printed_signals:
-        print(f' Creating signals for lineborders:{printed_signals}')
+    if(config[1]==1):
+        signals = find_signals_lineborders(netPaths,nodes,borders,signals)
+        printed_signals = [*signals]
+        if [*signals] != printed_signals:
+            print(f' Creating signals for lineborders:{printed_signals}')
 
     # Find signals for railJoints
-    signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals)
-    if [*signals] != printed_signals:
-        print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
-    printed_signals = [*signals]
+    if(config[2]==1):
+        signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals)
+        if [*signals] != printed_signals:
+            print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
+        printed_signals = [*signals]
 
     # Find signals for level crossings
-    signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
-    if [*signals] != printed_signals:
-        print(f' Creating signals for crossings:{[x for x in [*signals] if x not in printed_signals]}')
-    printed_signals = [*signals]
+    if(config[3]==1):
+        signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
+        if [*signals] != printed_signals:
+            print(f' Creating signals for crossings:{[x for x in [*signals] if x not in printed_signals]}')
+        printed_signals = [*signals]
 
     # Find signals for platforms
-    signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals)
-    if [*signals] != printed_signals:
-        print(f' Creating signals for platforms:{[x for x in [*signals] if x not in printed_signals]}')
-    printed_signals = [*signals]
-
+    if(config[4]==1):
+        signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals)
+        if [*signals] != printed_signals:
+            print(f' Creating signals for platforms:{[x for x in [*signals] if x not in printed_signals]}')
+        printed_signals = [*signals]
+   
     # Find signals for switches
-    signals = find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals)
-    if [*signals] != printed_signals:
-        print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
-    printed_signals = [*signals]
+    if(config[5]==1):
+        signals = find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,crossing_nodes,trainDetectionElements,signals)
+        if [*signals] != printed_signals:
+            print(f' Creating signals for switches:{[x for x in [*signals] if x not in printed_signals]}')
+        printed_signals = [*signals]
 
     #print(signals)
     for sig in signals:
@@ -1413,20 +1429,21 @@ def find_signals_lineborders(netPaths,nodes,borders,signals):
                 
             #print(node,position_index,position)
             name = "L"+str(len(signals)+1).zfill(2)
-            signals[sig_number] = {"From":node,"To":borders[node]["LineBorder"],"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
+            signals[sig_number] = {"From":node,"To":borders[node]["LineBorder"],"Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             #print(sig_number,signals[sig_number])
     return signals
 
 # Find signals for switches
-def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,trainDetectionElements,signals):
+def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,switchesIS,tracks,crossing_nodes,trainDetectionElements,signals):
 
     #print(netPaths)
     #print(nodeRole)
     #print(nodeSwitch)
     #print(netPaths)
+
     # Find every switch in the network
     for switch in switchesIS:
-        #print(f'{switch} - {nodeSwitch[switch]}')
+        
         sw_info = switchesIS[switch]
         start_node = nodeSwitch[switch]["Start"]
         continue_node = nodeSwitch[switch]["Continue"]
@@ -1454,14 +1471,24 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 
                 #print(f'Continue {continue_node} {switch} {side} {nodes[continue_node]["Inverter"]} {sig_number}')
-                position = closest_safe_point(signal_placement[continue_node][side],pos,side)
+                #position = closest_safe_point(signal_placement[continue_node][side],pos,side)
                 
-                direction = "normal" if pos[0] > position[0] else "reverse"
-                atTrack = "left" if pos[0] > position[0] else "right"
+                position_prev = closest_safe_point(signal_placement[continue_node]["Prev"],pos,"Prev") if "Prev" in signal_placement[continue_node] else [0,0]
+                position_next = closest_safe_point(signal_placement[continue_node]["Next"],pos,"Next") if "Next" in signal_placement[continue_node] else [0,0]
+
+                dist_prev = abs(position_prev[0] - pos[0]) if position_prev != [0,0] else 10000
+                dist_next = abs(position_next[0] - pos[0]) if position_next != [0,0] else 10000
                 
-                if nodes[start_node]["Inverter"]:
+                #print(f'XXX {name} {signal_placement[continue_node]} {dist_prev} {dist_next}')
+
+                position = position_next if (dist_next < dist_prev) else position_prev
+
+                direction = "normal" if position[0] < pos[0] else "reverse"
+                atTrack = "left" if position[0] < pos[0] else "right"
+                
+                if nodes[continue_node]["Inverter"]:
                     direction = 'normal' if direction == 'reverse' else 'reverse'
-                    atTrack = 'left' if direction == 'right' else 'right'
+                    atTrack = 'left' if direction == 'normal' else 'right'
 
                 signals[sig_number] = {"From":continue_node,"To":continue_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":signal_type,"Position":position,"Name":name}
                 #print(f'     Continue - {sig_number}:{signals[sig_number]}')
@@ -1470,14 +1497,20 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
         if branch_node in signal_placement and "Start" not in nodeRole[branch_node]:
             
             sig_number = "sig"+str(len(signals)+1).zfill(2)
-            
-            direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse"
-            atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
             pos = sw_info["Position"]
+
             side = "Next" if ("Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"]) else "Prev"
             
             position = [signal_placement[branch_node][side][0][0],-signal_placement[branch_node][side][0][1]]
             
+            #direction = "normal" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "reverse"
+            #atTrack = "left" if "Next" in netPaths[branch_node] and start_node in netPaths[branch_node]["Next"] else "right"
+            direction = "normal" if position[0] > pos[0] else "reverse"
+            atTrack = "left" if position[0] > pos[0] else "right"
+
+            direction = "reverse"
+            atTrack = "right"
+
             #if nodes[start_node]["Inverter"]:
             #    direction = 'normal' if direction == 'reverse' else 'reverse'
             #    atTrack = 'left' if direction == 'right' else 'right'
@@ -1505,14 +1538,26 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 side = "Prev" if side == "Next" else "Next"
 
             #print(f'Start {start_node} {switch} {side} {nodes[start_node]["Inverter"]} {sig_number}')
-            position = closest_safe_point(signal_placement[start_node][side],pos,side)
-            direction = "normal" if position[0] < pos[0] else "reverse"
-            atTrack = "left" if "Next" in netPaths[start_node] else "right"
+            position_prev = closest_safe_point(signal_placement[start_node]["Prev"],pos,"Prev") if "Prev" in signal_placement[start_node] else [0,0]
+            position_next = closest_safe_point(signal_placement[start_node]["Next"],pos,"Next") if "Next" in signal_placement[start_node] else [0,0]
 
+            dist_next = abs(position_next[0] - pos[0])
+            dist_prev = abs(position_prev[0] - pos[0])
+
+            position = position_next if (dist_next < dist_prev) else position_prev
+
+            #print(f'{name} {switch} {pos} {start_node} {dist_prev} {dist_next} {position}')
+
+            direction = "normal" if position[0] < pos[0] else "reverse"
+            atTrack = "left" if position[0] < pos[0] else "right"
+            
             if nodes[start_node]["Inverter"]:
                 direction = 'normal' if direction == 'reverse' else 'reverse'
-                #atTrack = 'left' if direction == 'right' else 'right'
+                atTrack = 'left' if direction == 'normal' else 'right'
             
+            if start_node in crossing_nodes:
+                position = position_next if position == position_prev else position_prev
+
             signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             #print(f'     Start circulation - {sig_number}:{signals[sig_number]}')
             
@@ -1531,14 +1576,23 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 #    side = "Prev" if side == "Next" else "Next"
 
                 #print(f'Start complex {start_node} {switch} {side} {nodes[start_node]["Inverter"]} {sig_number}')
-                position = closest_safe_point(signal_placement[start_node][side],pos,side)
+                position_prev = closest_safe_point(signal_placement[start_node]["Prev"],pos,"Prev") if "Prev" in signal_placement[start_node] else [0,0]
+                position_next = closest_safe_point(signal_placement[start_node]["Next"],pos,"Next") if "Next" in signal_placement[start_node] else [0,0]
+
+                dist_next = abs(position_next[0] - pos[0])
+                dist_prev = abs(position_prev[0] - pos[0])
+
+                position = position_next if (dist_next < dist_prev) else position_prev
                 
                 direction = "normal" if position[0] < pos[0] else "reverse"
-                atTrack = "left" if "Next" in netPaths[start_node] else "right"
-                           
+                atTrack = "left" if position[0] < pos[0] else "right"
+                
                 if nodes[start_node]["Inverter"]:
                     direction = 'normal' if direction == 'reverse' else 'reverse'
-                    #atTrack = 'left' if direction == 'right' else 'right'
+                    atTrack = 'left' if direction == 'normal' else 'right'
+
+                if start_node in crossing_nodes:
+                    position = position_next if position == position_prev else position_prev
 
                 signals[sig_number] = {"From":start_node,"To":start_node+"_left","Direction":direction,"AtTrack":atTrack,"Type":"Manouver","Position":position,"Name":name}
                 #print(f'     Start manouver - {sig_number}:{signals[sig_number]}')
@@ -1559,7 +1613,16 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         direction = "normal"
         atTrack = "left"
 
-        position = closest_safe_point(signal_placement[node]["Next"],pos,"Next")
+        if nodes[node]['Inverter']:
+            atTrack = "right"
+            neighbor = "Next"
+            direction = "reverse"
+        else:
+            atTrack = "left"
+            neighbor = "Next"
+            direction = "normal"
+
+        position = closest_safe_point(signal_placement[node][neighbor],pos,neighbor)
         name = "J"+str(len(signals)+1).zfill(2)
 
         # If the safe position is far away, avoid the signal
@@ -1570,7 +1633,17 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
         atTrack = "right"
-        position = closest_safe_point(signal_placement[node]["Prev"],pos,"Prev")
+
+        if nodes[node]['Inverter']:
+            atTrack = "left"
+            direction = "normal"
+            neighbor = "Prev"
+        else:
+            atTrack = "right"
+            direction = "reverse"
+            neighbor = "Prev"
+
+        position = closest_safe_point(signal_placement[node][neighbor],pos,neighbor)
         name = "J"+str(len(signals)+1).zfill(2)
 
         # If the safe position is far away, avoid the signal
@@ -1643,7 +1716,6 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
         pos = platforms[platform]["Position"]
         size = int(platforms[platform]["Value"])
         
-
         # Add an entrance signal and an exit signal
         sig_number = "sig"+str(len(signals)+1).zfill(2)
         direction = "reverse"
@@ -1651,7 +1723,7 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
         neighbor = "Next"
         safe_point = signal_placement[node][neighbor]
 
-        if nodes[node]['Inverter']:
+        if not nodes[node]['Inverter']:
             atTrack = "right"
             direction = "reverse"
         else:
@@ -1659,10 +1731,10 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
             direction = "normal"
 
         position = closest_safe_point(safe_point,pos,neighbor)
-        #if nodes[node]['Inverter']:
-        #    position[0] = position[0] - 100
-        #else:
-        #    position[0] = position[0] - 100
+        if nodes[node]['Inverter']:
+            position[0] = position[0] - 80
+        else:
+            position[0] = position[0] + 80
 
         name = "P"+str(len(signals)+1).zfill(2)
         
@@ -1676,7 +1748,7 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
         atTrack = "left"
         neighbor = "Prev"
 
-        if not nodes[node]['Inverter']:
+        if nodes[node]['Inverter']:
             atTrack = "right"
             direction = "reverse"
         else:
@@ -1684,10 +1756,10 @@ def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
             direction = "normal"
 
         position = closest_safe_point(signal_placement[node][neighbor],pos,neighbor)
-        #if nodes[node]['Inverter']:
-        #    position[0] = position[0] - 80
-        #else:
-        #    position[0] = position[0] - 105
+        if nodes[node]['Inverter']:
+            position[0] = position[0] + 80
+        else:
+            position[0] = position[0] - 80
 
         name = "P"+str(len(signals)+1).zfill(2)
         
@@ -1752,7 +1824,7 @@ def reduce_signals(signals,signal_placement):
     
     delete = []
     #for sig in signals:
-    #    print(signals[sig])
+    #    print(f'{sig, signals[sig]}')
     
     #print(signal_placement)
     for signal_a in signals:
@@ -1766,17 +1838,40 @@ def reduce_signals(signals,signal_placement):
 
                 a_position = signals[signal_a]["Position"][0]
                 b_position = signals[signal_b]["Position"][0]
+
+                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "L" and abs(a_position-b_position) < 300):
+                    if signal_a not in delete:
+                        print(f'Xy removing {signal_a} for {signal_b}')
+                        delete.append(signal_a)
+
+                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "T" and abs(a_position-b_position) < 300):
+                    if signal_b not in delete and signals[signal_b]["Name"][0] != "H":
+                        print(f'Xz removing {signal_b} for {signal_a}')
+                        delete.append(signal_b)
+
+                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "J" and abs(a_position-b_position) < 300):
+                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H":
+                        print(f'Xz removing {signal_b} for {signal_a}')
+                        delete.append(signal_b)
+
+                if (signal_a not in delete and a_position == b_position and signals[signal_a]["Direction"] == signals[signal_b]["Direction"]):
+                    #print(f'{signal_a} {a_position} | {signal_b} {b_position}')
+                    
+                    if signal_b not in delete and (signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H"):
+                        print(f'Yx removing {signal_b} for {signal_a}')
+                        delete.append(signal_b)
+
                 #print(f'{signal_a} {signal_b} {no_safe_points_between(danger_positions,a_position,b_position)} {abs(a_position-b_position)}')
-                if no_safe_points_between(danger_positions,a_position,b_position) and abs(a_position-b_position) < 300:
+                if no_safe_points_between(danger_positions,a_position,b_position) and abs(a_position-b_position) < 450:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if int(signal_a[3:]) < int(signal_b[3:]):
-                                    if signal_b not in delete:
+                                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S":
                                         print(f'A removing {signal_b} for {signal_a}')
                                         delete.append(signal_b)
                     
-                    if signals[signal_a]["Way"] == signals[signal_b]["Way"]:
+                    if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                         if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "T":
                             if signal_a not in delete:
                                 print(f'B removing {signal_a} for {signal_b}')
@@ -1793,40 +1888,55 @@ def reduce_signals(signals,signal_placement):
                             if signal_b not in delete:
                                 print(f'E removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
-                        if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "T":
+                        if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete:
                                 print(f'F removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
-                        if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "C":
+                        if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "C":
                             if signal_b not in delete:
                                 print(f'G removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
-                        if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "P":
-                            if signal_a not in delete:
-                                print(f'H removing {signal_a} for {signal_b}')
-                                delete.append(signal_a)  
-                        if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "T":
+                        if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "J":
                             if signal_b not in delete:
-                                print(f'I removing {signal_b} for {signal_a}')
-                                delete.append(signal_b)  
-                        if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "B":
+                                print(f'H removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)
+                        if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "S":
+                            if signal_a not in delete:
+                                print(f'I removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)
+                        if signals[signal_a]["Name"][0] == "L" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete:
                                 print(f'J removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)  
-                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "T":
+                        if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "L":
                             if signal_b not in delete:
                                 print(f'K removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)  
+                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "T":
+                            if signal_a not in delete:
+                                print(f'L removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)  
+                        if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "B":
+                            if signal_b not in delete:
+                                print(f'M removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)  
+                        if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "B":
+                            if signal_a not in delete:
+                                print(f'N removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)
+                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "P":
+                            if signal_b not in delete:
+                                print(f'O removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)   
+                        if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "B":
+                            if signal_a not in delete:
+                                print(f'P removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)
+                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "X":
+                            if signal_b not in delete:
+                                print(f'Q removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)          
 
-
-                        #if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "X":
-                        #    if signal_a not in delete:
-                        #        print(f'L removing {signal_a} for {signal_b}')
-                        #        delete.append(signal_a)
-                        #if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "P":
-                        #    if signal_b not in delete:
-                        #        print(f'M removing {signal_b} for {signal_a}')
-                        #        delete.append(signal_b)        
     for delete_signal in delete:
         del signals[delete_signal]
 
@@ -1936,97 +2046,107 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     for element in trainDetectionElements:
         if "RailJoint" in trainDetectionElements[element]["Type"]:
             if trainDetectionElements[element]["Node"] not in railJoints:
-                railJoints[trainDetectionElements[element]["Node"]] = {}
-            railJoints[trainDetectionElements[element]["Node"]] |= {"Joint":trainDetectionElements[element]["Name"],"Coordinate":trainDetectionElements[element]["Coordinate"],"Position":trainDetectionElements[element]["Position"]}
+                railJoints[trainDetectionElements[element]["Node"]] = []
+            railJoints[trainDetectionElements[element]["Node"]].append({"Joint":trainDetectionElements[element]["Name"],"Coordinate":trainDetectionElements[element]["Coordinate"],"Position":trainDetectionElements[element]["Position"]})
 
     # Adapting platforms to be node friendly
     platforms_node = {}
     for platform in platforms:
         node = platforms[platform]["Net"]
         if node not in platforms_node:
-            platforms_node[node] = {}
-        platforms_node[node] |= {"Platform":platform,"Value":platforms[platform]["Value"],"Direction":platforms[platform]["Direction"],"Position":platforms[platform]["Position"]}
+            platforms_node[node] = []
+        platforms_node[node].append({"Platform":platform,"Value":platforms[platform]["Value"],"Direction":platforms[platform]["Direction"],"Position":platforms[platform]["Position"]})
 
     # Adapting levelCrossings to be node friendly
     crossing_nodes = {}
     for crossing in levelCrossingsIS:
         if levelCrossingsIS[crossing]["Net"] not in crossing_nodes:
-            crossing_nodes[levelCrossingsIS[crossing]["Net"]] = {}
-        crossing_nodes[levelCrossingsIS[crossing]["Net"]] |= {"Id":crossing,"Position":levelCrossingsIS[crossing]["Position"],"Coordinate":levelCrossingsIS[crossing]["Coordinate"]}
+            crossing_nodes[levelCrossingsIS[crossing]["Net"]] = []
+        crossing_nodes[levelCrossingsIS[crossing]["Net"]].append({"Id":crossing,"Position":levelCrossingsIS[crossing]["Position"],"Coordinate":levelCrossingsIS[crossing]["Coordinate"]})
 
     # Move around every node
     for node in nodes:
         # Check if there is a RailJoint, Platform, LevelCrossing or curve.
         # If there is a RailJoint:
         if node in railJoints:
-            railJoint_position = railJoints[node]["Position"]
-            print(f"  {node} has a RailJoint[{railJoints[node]['Joint']}] @ {railJoint_position}")
-            if node not in signal_placement:
-                signal_placement[node] = {"Next":[],"Prev":[]}
+            for railJoint in railJoints[node]:
+                railJoint_position = railJoint["Position"]
+                print(f"  {node} has a RailJoint[{railJoint['Joint']}] @ {railJoint_position}")
+                if node not in signal_placement:
+                    signal_placement[node] = {"Next":[],"Prev":[]}
 
-            # next_position = RailJoint_position - one step
-            next_place = signal_placement[node]["Next"]
-            next_place = [round(railJoint_position[0] - step/2,1),round(railJoint_position[1],1)]
-            
-            # prev_position = RailJoint_position + one step
-            prev_place = signal_placement[node]["Prev"]
-            prev_place = [round(railJoint_position[0] + step/2,1),round(railJoint_position[1],1)]
+                # next_position = RailJoint_position - one step
+                next_place = signal_placement[node]["Next"]
+                next_place = [round(railJoint_position[0] - step/2,1),round(railJoint_position[1],1)]
+                
+                # prev_position = RailJoint_position + one step
+                prev_place = signal_placement[node]["Prev"]
+                prev_place = [round(railJoint_position[0] + step/2,1),round(railJoint_position[1],1)]
 
-            # Upload both positions to the node
-            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            if next_place:
-                signal_placement[node]["Next"].append(next_place)
-            if prev_place:
-                signal_placement[node]["Prev"].append(prev_place)
+                # Upload both positions to the node
+                #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                if next_place:
+                    signal_placement[node]["Next"].append(next_place)
+                if prev_place:
+                    signal_placement[node]["Prev"].append(prev_place)
+
         #print(signal_placement)
         # If there is a Platform:
         if node in platforms_node:
-            platform_position = platforms_node[node]["Position"]
-            print(f'  {node} has a Platform[{platforms_node[node]["Platform"]}] @ {platform_position}')
+            for platform in platforms_node[node]:
+                platform_position = platform["Position"]
+
+            #platform_position = platforms_node[node]["Position"]
+            print(f'  {node} has a Platform[{platform["Platform"]}] @ {platform_position}')
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
-            # next_position = Platform_position - one step
-            next_place = signal_placement[node]["Next"]
-            next_place = [round(platform_position[0]-step,1),round(platform_position[1],1)]
+                # next_position = Platform_position - one step
+                next_place = signal_placement[node]["Next"]
+                next_place = [round(platform_position[0]-step,1),round(platform_position[1],1)]
 
-            # prev_position = Platform_position + one step 
-            prev_place = signal_placement[node]["Prev"]
-            prev_place = [round(platform_position[0]+step,1),round(platform_position[1],1)]
+                # prev_position = Platform_position + one step 
+                prev_place = signal_placement[node]["Prev"]
+                prev_place = [round(platform_position[0]+step,1),round(platform_position[1],1)]
 
-            # Upload both positions to the node
-            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            if next_place:
-                #print(f'{platforms_node[node]["Platform"]} {"Next"} {next_place}')
-                signal_placement[node]["Next"].append(next_place)
-            if prev_place:
-                #print(f'{platforms_node[node]["Platform"]} {"Prev"} {prev_place}')
-                signal_placement[node]["Prev"].append(prev_place)
+                # Upload both positions to the node
+                #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                if next_place:
+                    #print(f'{platforms_node[node]["Platform"]} {"Next"} {next_place}')
+                    signal_placement[node]["Next"].append(next_place)
+                if prev_place:
+                    #print(f'{platforms_node[node]["Platform"]} {"Prev"} {prev_place}')
+                    signal_placement[node]["Prev"].append(prev_place)
+
         # If there is a LevelCrossing:
         if node in crossing_nodes:
-            crossing_positions = crossing_nodes[node]["Position"]
-            if (nodes[node]["Inverter"]):
-                crossing_positions[0] = crossing_positions[0] + 45
-            else:
-                crossing_positions[0] = crossing_positions[0] - 45
-            print(f'  {node} has a LevelCrossing[{crossing_nodes[node]["Id"]}] @ {crossing_positions}')
-            if node not in signal_placement:
-                signal_placement[node] = {"Next":[],"Prev":[]}
+            for crossing in crossing_nodes[node]:
+                crossing_positions = crossing["Position"]
 
-            # next_position = LevelCrossing_position - one step   
-            next_place = signal_placement[node]["Next"]
-            next_place = [round(crossing_positions[0]-step,1),round(crossing_positions[1],1)]
-            
-            # prev_position = LevelCrossing_position + one step
-            prev_place = signal_placement[node]["Prev"]
-            prev_place = [round(crossing_positions[0]+step,1),round(crossing_positions[1],1)]
+                #crossing_positions = crossing_nodes[node]["Position"]
+                if (nodes[node]["Inverter"]):
+                    crossing_positions[0] = crossing_positions[0] + 45
+                else:
+                    crossing_positions[0] = crossing_positions[0] - 45
+                print(f'  {node} has a LevelCrossing[{crossing["Id"]}] @ {crossing_positions}')
+                if node not in signal_placement:
+                    signal_placement[node] = {"Next":[],"Prev":[]}
 
-            # Upload both positions to the node
-            #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-            #print(f'{crossing_nodes[node]["Id"]} {"Next"} {next_place}')
-            #print(f'{crossing_nodes[node]["Id"]} {"Prev"} {prev_place}')
-            signal_placement[node]["Next"].append(next_place)
-            signal_placement[node]["Prev"].append(prev_place)
+                # next_position = LevelCrossing_position - one step   
+                next_place = signal_placement[node]["Next"]
+                next_place = [round(crossing_positions[0]-step,1),round(crossing_positions[1],1)]
+                
+                # prev_position = LevelCrossing_position + one step
+                prev_place = signal_placement[node]["Prev"]
+                prev_place = [round(crossing_positions[0]+step,1),round(crossing_positions[1],1)]
+
+                # Upload both positions to the node
+                #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                #print(f'{crossing_nodes[node]["Id"]} {"Next"} {next_place}')
+                #print(f'{crossing_nodes[node]["Id"]} {"Prev"} {prev_place}')
+                signal_placement[node]["Next"].append(next_place)
+                signal_placement[node]["Prev"].append(prev_place)
+
         # If there is a curve:
         if nodes[node]["Lines"] > 1:
             all_points = nodes[node]["All"]
@@ -2075,6 +2195,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     signal_placement[node]["Prev"].append(i)
             #print(f'R:{next_place} in {signal_placement[node]["Next"]}')
             #print(f'R:{prev_place} in {signal_placement[node]["Prev"]}')
+
         # If there is no RailJoint, Platform, LevelCrossing or curve AND it is horizontal:
         if node not in signal_placement:
             if (nodes[node]["Begin"][1] == nodes[node]["End"][1]):
@@ -2103,10 +2224,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 #print(f'{"Default"} {"Prev"} {prev_place}')
                 signal_placement[node]["Next"].append(next_place)
                 signal_placement[node]["Prev"].append(prev_place)
-        
+  
     # Simplify closest signal placements
     signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node)
-    
+  
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
@@ -2119,9 +2240,10 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 # Simplify closest signal placements
 def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node):
     distance = 300
-    print(signal_placement)
+    #print(signal_placement)
     #print(crossing_nodes)
     #print(platforms_node)
+
     for node in signal_placement:
         old_next = signal_placement[node]["Next"]
         old_prev = signal_placement[node]["Prev"]
@@ -2129,7 +2251,6 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
         n_p_prev = old_prev
 
         #print(node,n_p_next,n_p_prev)
-        
         for n in old_next:
             for p in old_prev:
                 #print(node,old_next,old_prev)
@@ -2139,11 +2260,11 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
                 if abs(n[0]-p[0]) < distance:
                     #print(node,n,p)
                     if node in crossing_nodes and node in platforms_node:
-                        crossing_pos = crossing_nodes[node]["Position"][0]
-                        platform_pos = platforms_node[node]["Position"][0]
+                        crossing_pos = crossing_nodes[node][0]["Position"][0]
+                        platform_pos = platforms_node[node][0]["Position"][0]
                     else:
                         continue
-                    print(node,crossing_pos,platform_pos,platform_pos-crossing_pos)
+                    #print(node,crossing_pos,platform_pos,platform_pos-crossing_pos)
                     if (abs(platform_pos-crossing_pos) < distance):
                         print(f'remove {n} {p}')
                         n_p_next.remove(n)
@@ -2167,13 +2288,14 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
 def order_nodes_points(nodes):
     
     for node in nodes: 
+        
         if nodes[node]["All"][0] < nodes[node]["All"][-1]:
             nodes[node]["Way"] = ">>"
             nodes[node]["Inverter"] = False
         else:
             nodes[node]["Way"] = "<<"
             nodes[node]["Inverter"] = True
-        
+        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -2272,7 +2394,7 @@ def print_net(netElements):
                                 print(f'\t\t\t GeometricCoordinate: PositioningSystemRef = "{l.PositioningSystemRef}" X = "{l.X}" Y = "{l.Y}"')
 
 ##%%%
-def analyzing_object(object):
+def analyzing_object(object,config = [1,1,1,1,1,1,1]):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
@@ -2282,10 +2404,10 @@ def analyzing_object(object):
     print(" Analyzing graph")
     #print_net(netElements)
     nodes,neighbours,switches,limits,netPaths = analyzing_graph(netElements,netRelations)
-    
+
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization,nodes)
-    
+
     infrastructure_file = "C:\PhD\RailML\\Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
@@ -2300,12 +2422,13 @@ def analyzing_object(object):
     #print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
     signals_file = "C:\PhD\RailML\\Dangers.RNA"
-    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms)
+    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config)
     
     find_way(signals,nodes)
     # Reduce redundant signals
-    print(" Reducing redundant signals")
-    reduce_signals(signals,signal_placement)
+    if (config[6]):
+        print(" Reducing redundant signals")
+        reduce_signals(signals,signal_placement)
     
     move_signals(signals,nodes,True)
     
@@ -2316,5 +2439,7 @@ def analyzing_object(object):
     export_routes("C:\PhD\RailML\\Routes.RNA",routes,object)
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
+
+    return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}']
 # %%
 #
