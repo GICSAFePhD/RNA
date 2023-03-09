@@ -8,7 +8,6 @@ from collections import defaultdict
 from RailML.RailTopoModel.IntrinsicCoordinate import IntrinsicCoordinate
 from RailML.XML_tools import *
 
-
 arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          2:[0,0,0,0,1,1,1],
          3:[0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,1,1,1,0,0,0,0,0,1,0,0,0,0,1,0,1,1,1,1,0,0,0,0,1,1,0,0,0,0,0,0],
@@ -16,7 +15,6 @@ arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          5:[0,0,0,0,1,1,1,1],
          6:[0,0,0,0,0,0,0,0,0,1,1],
          7:[0,1,1,0,1,1,0]}
-
 
 #%%%
 def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,1],example = 1):
@@ -2061,7 +2059,7 @@ def export_signal(file,signals,object):
         #routes = AssetsForIL.Routes
     return
 
-def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms):
+def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,dist = 300):
     signal_placement = {}
     step = 200
 
@@ -2250,7 +2248,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 signal_placement[node]["Prev"].append(prev_place)
   
     # Simplify closest signal placements
-    signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node)
+    signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist)
   
     # Deleting the signal placements with only no members
     for i in signal_placement:
@@ -2262,8 +2260,9 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
     return signal_placement
 
 # Simplify closest signal placements
-def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node):
-    distance = 300
+def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist = 300):
+    print(dist)
+    distance = dist
     #print(signal_placement)
     #print(crossing_nodes)
     #print(platforms_node)
@@ -2319,7 +2318,9 @@ def order_nodes_points(nodes):
         else:
             nodes[node]["Way"] = "<<"
             nodes[node]["Inverter"] = True
-        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
+        #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
+
+        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -2421,11 +2422,11 @@ def arrow_simplification(signals,nodes,sequence):
 
     signals_by_node = {}
     
-    for node in nodes:
-        print(node)
+    #for node in nodes:
+    #    print(node)
         
     for signal in signals:
-        print(signal,signals[signal])
+        #print(signal,signals[signal])
         if signals[signal]['From'] not in signals_by_node:
             signals_by_node[signals[signal]['From']] = {}
   
@@ -2436,19 +2437,19 @@ def arrow_simplification(signals,nodes,sequence):
     for node in nodes:
         #print(int(node[2:]))
         if node in signals_by_node:
-            print(node,signals_by_node[node])
+            #print(node,signals_by_node[node])
             for signal in signals_by_node[node]:
-                if sequence[i] in signals_by_node[node][signal]:
-                    print(f'{signal} alive')
-                else:
+                if sequence[i] not in signals_by_node[node][signal]:
+                    #print(f'{signal} alive')
+                #else:
                     del signals[signal]
-                    print(f'{signal} dead')
+                    #print(f'{signal} dead')
         i = i+1
-    for signal in signals:
-        print(signal,signals[signal])    
+    #for signal in signals:
+    #    print(signal,signals[signal])    
 
 ##%%%
-def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1]):
+def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
@@ -2467,9 +2468,8 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1]):
     
     #for i in nodes:
     #    print(i,nodes[i])
-    
     print(" Detecting Danger --> Safe_points.RNA")
-    signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms)
+    signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,config[8])
     safe_point_file = "C:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
@@ -2479,7 +2479,6 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1]):
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config)
     
     find_way(signals,nodes)
-
 
     if (config[6]):
         # Apply arrow simplification
