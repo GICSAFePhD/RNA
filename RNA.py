@@ -17,7 +17,7 @@ arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          7:[0,1,1,0,1,1,0]}
 
 #%%%
-def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,1],example = 1):
+def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,200,200],example = 1):
     
     sequence = [">" if track == 0 else "<" for track in arrow[example] ]
     print(f'{sequence}')
@@ -1317,7 +1317,7 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
         if [*signals] != printed_signals:
             print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
         printed_signals = [*signals]
-
+    
     # Find signals for level crossings
     if(config[3]==1):
         signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
@@ -1682,7 +1682,7 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
     for crossing in levelCrossingsIS:
         #print(levelCrossingsIS[crossing])
         node = levelCrossingsIS[crossing]["Net"] 
-        #print(nodes[node])
+        #print(node,nodes[node])
         pos = levelCrossingsIS[crossing]["Position"]
         # Add an entrance signal and an exit signal
         sig_number = "sig"+str(len(signals)+1).zfill(2)
@@ -2059,7 +2059,7 @@ def export_signal(file,signals,object):
         #routes = AssetsForIL.Routes
     return
 
-def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,dist = 300):
+def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,dist = 300, length = 200):
     signal_placement = {}
     step = 200
 
@@ -2225,27 +2225,66 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 if node not in signal_placement:
                     signal_placement[node] = {"Next":[],"Prev":[]}
                 
-                # Find middle point between switches
-                x_middle_point = (nodes[node]["Begin"][0] + nodes[node]["End"][0]) / 2
-                y_coordinate = nodes[node]["Begin"][1]
+                # Find middle points between switches
+
+                begin = nodes[node]["Begin"][0]
+                end = nodes[node]["End"][0]
+                dist = abs(end - begin)
+
+                cuts = dist // length
+
+                #print(f'Cuts: {cuts} [{begin},{nodes[node]["Begin"][1]}] to [{end},{nodes[node]["Begin"][1]}] Length: {dist} Max_Length: {length}')
+                if cuts > 1:
+                    slice = dist / cuts
+                    #print(f'slice {slice}')
+                    #y = nodes[node]["End"][1]
+                    #print(f'Cuts: {cuts} [{begin},{y}] to [{end},{y}] Length: {dist} Max_Length: {length}')
+
+                    for x in range(cuts-1):
+                        print(x)
+                        #print(f'{x} > [{begin+(x+1)*slice},{y}]')
+                        x_middle_point = begin+(x+1)*slice
+                        y_coordinate = nodes[node]["Begin"][1]
+        
+                        print(f'  {node} has a Middle point @ {[x_middle_point,y_coordinate]}')
                 
-                print(f'  {node} has a Middle point @ {[x_middle_point,y_coordinate]}')
+                        # next_position
+                        next_place = signal_placement[node]["Next"]
+                        next_place = [round(x_middle_point,1),round(y_coordinate,1)]
+                        
+                        # prev_position
+                        prev_place = signal_placement[node]["Prev"]
+                        prev_place = [round(x_middle_point,1),round(y_coordinate,1)]
                 
-                # next_position
-                next_place = signal_placement[node]["Next"]
-                next_place = [round(x_middle_point,1),round(y_coordinate,1)]
-                
-                # prev_position
-                prev_place = signal_placement[node]["Prev"]
-                prev_place = [round(x_middle_point,1),round(y_coordinate,1)]
-                
-                # Upload both positions to the node
-                #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
-                
-                #print(f'{"Default"} {"Next"} {next_place}')
-                #print(f'{"Default"} {"Prev"} {prev_place}')
-                signal_placement[node]["Next"].append(next_place)
-                signal_placement[node]["Prev"].append(prev_place)
+                        # Upload both positions to the node
+                        #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                        
+                        #print(f'{"Default"} {"Next"} {next_place}')
+                        #print(f'{"Default"} {"Prev"} {prev_place}')
+                        signal_placement[node]["Next"].append(next_place)
+                        signal_placement[node]["Prev"].append(prev_place)
+                else:
+                    # Find middle point between switches
+                    x_middle_point = (nodes[node]["Begin"][0] + nodes[node]["End"][0]) / 2
+                    y_coordinate = nodes[node]["Begin"][1]
+                    
+                    print(f'  {node} has a Middle point @ {[x_middle_point,y_coordinate]}')
+                    
+                    # next_position
+                    next_place = signal_placement[node]["Next"]
+                    next_place = [round(x_middle_point,1),round(y_coordinate,1)]
+                    
+                    # prev_position
+                    prev_place = signal_placement[node]["Prev"]
+                    prev_place = [round(x_middle_point,1),round(y_coordinate,1)]
+                    
+                    # Upload both positions to the node
+                    #signal_placement[node] |= {"Next":next_place,"Prev":prev_place} 
+                    
+                    #print(f'{"Default"} {"Next"} {next_place}')
+                    #print(f'{"Default"} {"Prev"} {prev_place}')
+                    signal_placement[node]["Next"].append(next_place)
+                    signal_placement[node]["Prev"].append(prev_place)
   
     # Simplify closest signal placements
     signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist)
@@ -2261,7 +2300,6 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
 
 # Simplify closest signal placements
 def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist = 300):
-    print(dist)
     distance = dist
     #print(signal_placement)
     #print(crossing_nodes)
@@ -2280,7 +2318,7 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
                 if old_next.index(n) == old_prev.index(p):
                     continue
                 #print(n,p,abs(n[0]-p[0]),distance,abs(n[0]-p[0]) < distance)
-                if abs(n[0]-p[0]) < distance:
+                if abs(n[0]-p[0]) < distance and n[1] == p[1]:
                     #print(node,n,p)
                     if node in crossing_nodes and node in platforms_node:
                         crossing_pos = crossing_nodes[node][0]["Position"][0]
@@ -2289,22 +2327,25 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
                         continue
                     #print(node,crossing_pos,platform_pos,platform_pos-crossing_pos)
                     if (abs(platform_pos-crossing_pos) < distance):
-                        print(f'remove {n} {p}')
-                        n_p_next.remove(n)
-                        n_p_prev.remove(p)
+                        if n in n_p_next and p in n_p_prev:
+                            print(f'remove_a {n} {p}')
+                            n_p_next.remove(n)
+                            n_p_prev.remove(p)
 
                     if (platform_pos < n[0] < crossing_pos or crossing_pos < n[0] < platform_pos) and (platform_pos < p[0] < crossing_pos or crossing_pos < p[0] < platform_pos):
                         continue
                     else:
-                        print(f'remove {n} {p}')
-                        n_p_next.remove(n)
-                        n_p_prev.remove(p)
+                        if n in n_p_prev and p in n_p_next:
+                            print(f'remove_b {n} {p}')
+                            n_p_next.remove(n)
+                            n_p_prev.remove(p)
 
         #print(n_p_next)
         #print(n_p_prev)
     
         signal_placement[node]["Next"] = n_p_next
         signal_placement[node]["Prev"] = n_p_prev
+    #print(signal_placement)
     return signal_placement
 
 # Order que "All" attribute for nodes:
@@ -2469,7 +2510,7 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
     #for i in nodes:
     #    print(i,nodes[i])
     print(" Detecting Danger --> Safe_points.RNA")
-    signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,config[8])
+    signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,config[8],config[9])
     safe_point_file = "C:\PhD\RailML\\Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
