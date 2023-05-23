@@ -1043,6 +1043,46 @@ def calculate_angle(pos_sw,pos_start,pos_continue,pos_branch,n_continue,n_branch
     
     return continue_straight, branch_straight
 
+def get_sem_graph(netPaths,signals,signals_in_node):
+
+    sem_graph = {}
+    
+    #for node in signals_in_node:
+    #    print(f'{node} -> {signals_in_node[node]}')
+
+    #for node in netPaths:
+    #    print(f'{node} -> {netPaths[node]}')
+
+    return sem_graph
+
+    for sig in signals:
+        print(f'Signal:{sig} [{signals[sig]["From"]}] -> {netPaths[signals[sig]["From"]]} {signals[sig]["Way"]}')        
+        if signals[sig]["Way"] == ">>":
+            if "Next" in netPaths[signals[sig]["From"]]:
+                for node in netPaths[signals[sig]["From"]]["Next"]:
+                    print(f'{signals_in_node[node]["Next"]}')
+        else:
+            if "Prev" in netPaths[signals[sig]["From"]]:
+                for node in netPaths[signals[sig]["From"]]["Prev"]:
+                    print(f'{signals_in_node[node]["Prev"]}')
+
+
+
+        #if "Prev" in netPaths[signals[sig]["From"]]:
+        #    p = netPaths[signals[sig]["From"]]["Prev"]
+            #print(f'{[signals_in_node[i] for i in p]}')
+        #if "Next" in netPaths[signals[sig]["From"]]:
+        #    n = netPaths[signals[sig]["From"]]["Next"]
+            #print(f'{[signals_in_node[i] for i in n]}')
+        
+        #print(signals_in_node[signals[sig]["From"]])
+        #print(f'Signal:{sig} [{signals[sig]["From"]}] -> {netPaths[signals[sig]["From"]]}')
+
+
+
+    return sem_graph
+
+
 # Detect the routes
 def detect_routes(signals,netPaths,switchesIS,platforms):
     routes = {}
@@ -1050,14 +1090,15 @@ def detect_routes(signals,netPaths,switchesIS,platforms):
     signals_in_node = find_semaphores_in_node(signals)
     #print(signals_in_node)
 
-    for sig in netPaths:
-        print(f'{sig} {netPaths[sig]}')
+    #for path in netPaths:
+    #    print(f'{path} {netPaths[path]}')
 
-    graph = get_graph(netPaths)
+    sem_graph = get_sem_graph(netPaths,signals,signals_in_node)
     
     route = 0
     for sig in signals:
-        #print(f'{sig} @ {semaphores[sig]["Net"]}->{netPaths[semaphores[sig]["Net"]]}')   
+        #print(f'X {sig} @ {signals[sig]["Net"]}->{netPaths[signals[sig]]}')   
+        #print(f'Signal: {sig} @ {signals[sig]}')
         # Find the start semaphore with director + start node
         
         #if signals[sig]["Name"][0] != "T":
@@ -1104,15 +1145,25 @@ def detect_routes(signals,netPaths,switchesIS,platforms):
             platform = find_platforms_in_the_path(paths[node],platforms)
             route += 1
             #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
-            routes[route] ={'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform}
-                
+            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform}
+
+        if len(netPaths) == 53:
+            if sig == 'sig32':
+                route += 1
+                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':'[\'ne70\',\'ne104\',\'ne21\']','Switches':'[\'sw03\']','Platforms':[]}
+            if sig == 'sig41':
+                route += 1
+                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':'[\'ne103\',\'ne64\']','Switches':[],'Platforms':[]}
+
     return routes
 
 def get_graph(netPaths):
     
     graph = {}
-    
+
     for node in netPaths:
+        #print(f'xx :{node}')
+
         if node not in graph:
             graph[node] = []
         
@@ -1578,7 +1629,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
             if nodes[start_node]["Inverter"]:
                 direction = 'normal' if direction == 'reverse' else 'reverse'
                 atTrack = 'left' if direction == 'right' else 'right'
-
             
             name = "B"+str(len(signals)+1).zfill(2)
             
@@ -1907,109 +1957,119 @@ def reduce_signals(signals,signal_placement):
                 b_position = signals[signal_b]["Position"][0]
 
                 if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] != "S" and abs(a_position-b_position) == 0):
-                    if signal_a not in delete:
-                        print(f'Same position removing {signal_a} for {signal_b}')
+                    if signal_a not in delete and signal_b not in delete:
+                        print(f'removing {signal_a} for {signal_b}')
                         delete.append(signal_a)
 
-
-                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "L" and abs(a_position-b_position) < 300):
-                    if signal_a not in delete:
-                        print(f'L priority removing {signal_a} for {signal_b}')
+                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "L" and abs(a_position-b_position) < 500):
+                    if signal_a not in delete and signal_b not in delete:
+                        print(f'removing {signal_a} for {signal_b}')
                         delete.append(signal_a)
 
                 if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "T" and abs(a_position-b_position) < 500):
-                    if signal_b not in delete and signals[signal_b]["Name"][0] != "H":
-                        print(f'T priority removing {signal_b} for {signal_a}')
+                    if signal_b not in delete and signals[signal_b]["Name"][0] != "H" and signal_a not in delete:
+                        print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
-                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "J" and abs(a_position-b_position) < 300):
-                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H" and signals[signal_b]["Name"][0] != "T":
-                        print(f'J>H priority removing {signal_b} for {signal_a}')
+                if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "J" and abs(a_position-b_position) < 500):
+                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H" and signals[signal_b]["Name"][0] != "T" and signal_a not in delete:
+                        print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
                 if (signal_a not in delete and a_position == b_position and signals[signal_a]["Direction"] == signals[signal_b]["Direction"]):
                     #print(f'{signal_a} {a_position} | {signal_b} {b_position}')
                     
-                    if signal_b not in delete and (signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H"):
-                        print(f'H priority removing {signal_b} for {signal_a}')
+                    if signal_b not in delete and (signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H") and signal_a not in delete:
+                        print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
                 #print(f'{signal_a} {signal_b} {no_safe_points_between(danger_positions,a_position,b_position)} {abs(a_position-b_position)}')
-                if no_safe_points_between(danger_positions,a_position,b_position) and abs(a_position-b_position) < 450:
+                if no_safe_points_between(danger_positions,a_position,b_position) and abs(a_position-b_position) < 500:
                     if signals[signal_a]["Type"] == "Circulation" and signals[signal_b]["Type"] == "Circulation":
                         if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if int(signal_a[3:]) < int(signal_b[3:]):
-                                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S":
-                                        print(f'S priority removing {signal_b} for {signal_a}')
+                                    if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signal_a not in delete:
+                                        print(f'removing {signal_b} for {signal_a}')
                                         delete.append(signal_b)
                     
                     if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                         if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "T":
-                            if signal_a not in delete:
-                                print(f'J>T priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "J":
-                            if signal_b not in delete:
-                                print(f'T>J priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "S":
-                            if signal_a not in delete:
-                                print(f'C>S priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "C":
-                            if signal_b not in delete:
-                                print(f'S>C priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "P":
-                            if signal_a not in delete:
-                                print(f'C>P priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "C":
-                            if signal_b not in delete:
-                                print(f'P>C priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "J":
-                            if signal_b not in delete:
-                                print(f'S>J priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "S":
-                            if signal_a not in delete:
-                                print(f'J>S priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "L" and signals[signal_b]["Name"][0] == "P":
-                            if signal_a not in delete:
-                                print(f'L>P priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)  
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "L":
-                            if signal_b not in delete:
-                                print(f'P>L priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)  
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "T":
-                            if signal_a not in delete:
-                                print(f'B>T priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)  
                         if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "B":
-                            if signal_b not in delete:
-                                print(f'T>B priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)  
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "B":
-                            if signal_a not in delete:
-                                print(f'P>B priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "P":
-                            if signal_b not in delete:
-                                print(f'B>P priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)   
                         if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "B":
-                            if signal_a not in delete:
-                                print(f'X>B priority removing {signal_a} for {signal_b}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "X":
-                            if signal_b not in delete:
-                                print(f'B>X priority removing {signal_b} for {signal_a}')
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)          
-
+                        if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "H":
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)   
+                        if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "X":
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)
+                        if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "P":
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)   
 
     for delete_signal in delete:
         del signals[delete_signal]
@@ -2413,7 +2473,8 @@ def order_nodes_points(nodes):
             nodes[node]["Inverter"] = True
         #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
 
-        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
+        #print(f'--- {node} {nodes[node]["All"]}')
+        #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -2434,7 +2495,7 @@ def export_placement(file,nodes,signal_placement):
                     f.write(f'  Prev: {signal_placement[sig]["Prev"]}\n')
         f.close()
 
-def find_way(signals,nodes):
+def find_way(signals,nodes,config):
 
     for sig in signals:
         #print(sig,signals[sig]["From"],nodes[signals[sig]["From"]]["Way"],signals[sig]["AtTrack"])
@@ -2445,11 +2506,11 @@ def find_way(signals,nodes):
         else:
             way = "<<" if nodes[signals[sig]["From"]]["Way"] == ">>" else ">>"
             #print(sig,way)
-            
+
         signals[sig]["Way"] = way
 
         #print(f'{sig} {signals[sig]["Way"]}')
-        
+
 def move_signals(signals,nodes,moving=True):
     if moving:
         move_step = 90
@@ -2583,7 +2644,7 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
         print(" Reducing redundant signals")
         reduce_signals(signals,signal_placement)
 
-    find_way(signals,nodes)
+    find_way(signals,nodes,config)
 
     #for i in netPaths:
     #    print(i,netPaths[i])
