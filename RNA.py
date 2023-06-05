@@ -14,7 +14,8 @@ arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          4:[0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1,1,0,0,0,1,0,1,1,1],
          5:[0,0,0,0,1,1,1,1],
          6:[0,0,0,0,0,0,0,0,0,1,1],
-         7:[0,1,1,0,1,1,0]}
+         7:[0,1,1,0,1,1,0],
+         8:[0,1,1,0,0]}
 
 #%%%
 def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,200,200],example = 1):
@@ -2585,9 +2586,10 @@ def arrow_simplification(signals,nodes,sequence):
         #print(signal,signals[signal])
         if signals[signal]['From'] not in signals_by_node:
             signals_by_node[signals[signal]['From']] = {}
-  
+        #print(f'{signal} {signals[signal]["Way"]}')
         if ('left' in signals[signal]['To'] or 'right' in signals[signal]['To']):
-            signals_by_node[signals[signal]['From']][signal] = '<' if 'left' in signals[signal]['To'] else '>'
+            #signals_by_node[signals[signal]['From']][signal] = '<' if 'left' in signals[signal]['To'] else '>'
+            signals_by_node[signals[signal]['From']][signal] = '<' if '<' in signals[signal]['Way'] else '>'
 
     i = 0
     for node in nodes:
@@ -2598,7 +2600,9 @@ def arrow_simplification(signals,nodes,sequence):
                 if sequence[i] not in signals_by_node[node][signal]:
                     #print(f'{signal} alive')
                 #else:
-                    del signals[signal]
+                    if signals[signal]["Name"][0] != "S" and signals[signal]["Name"][0] != "B" and signals[signal]["Name"][0] != "C" and signals[signal]["Name"][0] != "H":
+                        print(f'Single track {signals[signal]["Name"]}')
+                        del signals[signal]
                     #print(f'{signal} dead')
         i = i+1
     #for signal in signals:
@@ -2634,6 +2638,8 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
     signals_file = "C:\PhD\RailML\\Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config)
     
+    find_way(signals,nodes,config)
+
     if (config[6]):
         # Apply arrow simplification
         print(" One direction only")
@@ -2644,7 +2650,8 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
         print(" Reducing redundant signals")
         reduce_signals(signals,signal_placement)
 
-    find_way(signals,nodes,config)
+    #find_way(signals,nodes,config)
+    
 
     #for i in netPaths:
     #    print(i,netPaths[i])
