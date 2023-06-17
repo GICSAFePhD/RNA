@@ -18,6 +18,8 @@ arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          8:[0,1,1,0,0]}
 
 #%%%
+RML_old = railML.railML()
+
 def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,1,1,200,200],example = 1):
     
     sequence = [">" if track == 0 else "<" for track in arrow[example] ]
@@ -35,17 +37,25 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
         ignore = {None}
     else:
         ignore = {"SignalsIS","SignalsIL","Routes"}
-        
+
     if test:
         print("Creating railML object")
     get_branches(RML,root,ignore = ignore,test = False )
     
+    get_branches(RML_old,root,ignore = {None},test = False )
+    print("Reading old interlocking table")
+    try:
+        old_table,switch_net,platform_net,crossing_net = get_old_interlocking_table(RML_old,example)
+    except:
+        old_table = {}
+        print("No interlocking table found")
+
     if ignore != {None}:
         delete_signal_visual(RML)
     
     if test:
         print("Analyzing railML object")
-    x = analyzing_object(RML,sequence,config)
+    x = analyzing_object(RML,sequence,switch_net,platform_net,crossing_net,old_table,example,config)
     
     # Create new signalling
     
@@ -59,6 +69,117 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
         f.close()
 
     return x
+
+def get_old_interlocking_table(object,example):
+
+    old_table = {}
+
+    signals_net = {}
+    switch_net = {}
+    crossing_net = {}
+    platform_net = {}
+    
+    for signal in object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS:
+        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+        signals_net[signal.Name[0].Name] = {'net':signal.SpotLocation[0].NetElementRef}
+
+    for signal in object.Infrastructure.InfrastructureVisualizations.Visualization:
+        for x in signal.SpotElementProjection:
+            name = x.Name[0].Name
+            if 'S' in name and 'Sw' not in name:
+                signals_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+
+    #print(signals_net)
+
+    for crossing in object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS[0].LevelCrossingIS:
+        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+        crossing_net[crossing.Name[0].Name] = {'net':crossing.SpotLocation[0].NetElementRef}
+
+    for crossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
+        for x in crossing.SpotElementProjection:
+            name = x.Name[0].Name
+            if 'Lc' in name:
+                crossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+
+    #print(crossing_net)
+
+    for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
+        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+        platform_net[platform.Name[0].Name] = {'net':platform.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
+
+    for platform in object.Infrastructure.InfrastructureVisualizations.Visualization:
+        for x in platform.SpotElementProjection:
+            name = x.Name[0].Name
+            if 'Plat' in name:
+                platform_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+
+    #print(platform_net)
+
+    for switch in object.Infrastructure.FunctionalInfrastructure.SwitchesIS[0].SwitchIS:
+        main = switch.SpotLocation[0].NetElementRef
+        left = switch.LeftBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+        left_radius = switch.LeftBranch[0].Radius
+        right = switch.RightBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+
+        normal = right if '-' in left_radius else left
+        reverse = left if '-' in left_radius else right
+
+        switch_net[switch.Name[0].Name] = {'main':main,'normal':normal,'reverse':reverse}
+
+    #print(switch_net)
+
+    i = 0
+    for route in object.Interlocking.AssetsForIL[0].Routes.Route:
+        #print(RML.Interlocking.AssetsForIL[0].Routes.Route[i])
+        i = i + 1
+        signals = route.Designator[0].Entry[6:]
+        [signal_start,signal_end] = signals.split(' ')[0].split('-')
+        [net_start,net_end]         = [signals_net[signal_start]['net'],signals_net[signal_end]['net']]
+
+        way = ">>" if signals_net[signal_start]['x'] < signals_net[signal_end]['x'] else "<<"
+
+        old_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way}
+
+        if net_start != net_end:
+            if ' ' in signals:
+                switch = signals.split(' ')[1]
+                #print(switch[1:-1])
+                old_table[i] |= {'switch':switch[1:-1]}
+
+        for platform in platform_net:
+            if platform_net[platform]['net'] == net_start or platform_net[platform]['net'] == net_end:
+                if way == ">>":
+                    if signals_net[signal_start]['x'] < platform_net[platform]['x'] and signals_net[signal_end]['x'] > platform_net[platform]['x']:
+                        old_table[i] |= {'platform':platform}
+                else:
+                    if signals_net[signal_start]['x'] > platform_net[platform]['x'] and signals_net[signal_end]['x'] < platform_net[platform]['x']:
+                        old_table[i] |= {'platform':platform}
+
+        for crossing in crossing_net:
+            if crossing_net[crossing]['net'] == net_start or crossing_net[crossing]['net'] == net_end:
+                if way == ">>":
+                    if signals_net[signal_start]['x'] < crossing_net[crossing]['x'] and signals_net[signal_end]['x'] > crossing_net[crossing]['x']:
+                        old_table[i] |= {'crossing':crossing}
+                else:
+                    if signals_net[signal_start]['x'] > crossing_net[crossing]['x'] and signals_net[signal_end]['x'] < crossing_net[crossing]['x']:
+                        old_table[i] |= {'crossing':crossing}
+
+        #print(f'Route_{i:02}: {signal_start}[{net_start}] {signal_end}[{net_end}]')
+        
+    with open("C:\PhD\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
+        i = 0
+        f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
+        for route in object.Interlocking.AssetsForIL[0].Routes.Route:
+            i = i + 1
+            switch = old_table[i]["switch"] if "switch" in old_table[i] else "-"
+            platform = old_table[i]["platform"] if "platform" in old_table[i] else "-"
+            crossing = old_table[i]["crossing"] if "crossing" in old_table[i] else "-"
+
+            f.write(f'\nR_{i:02} , {old_table[i]["signal_start"]} , {old_table[i]["signal_end"]} , {old_table[i]["way"]} , {old_table[i]["net_start"]}-{old_table[i]["net_end"]} , {switch} , {platform} , {crossing}')
+        
+        f.close()
+
+    return old_table,switch_net,platform_net,crossing_net
 
 def delete_signal_visual(object):
     
@@ -312,12 +433,12 @@ def detect_levelCrossingsIS(infrastructure,visualization):
     if infrastructure.LevelCrossingsIS != None:
         for i in infrastructure.LevelCrossingsIS[0].LevelCrossingIS:
             if i.Id not in levelCrossingsIS.keys():
-                levelCrossingsIS[i.Id] = {"Net":i.SpotLocation[0].NetElementRef,"Lights":i.Protection[0].Lights,"Acoustic":i.Protection[0].Acoustic,"Protection":i.Protection[0].HasActiveProtection,"Barriers":i.Protection[0].Barriers,"Coordinate":i.SpotLocation[0].IntrinsicCoord}
+                levelCrossingsIS[i.Name[0].Name] = {"Net":i.SpotLocation[0].NetElementRef,"Lights":i.Protection[0].Lights,"Acoustic":i.Protection[0].Acoustic,"Protection":i.Protection[0].HasActiveProtection,"Barriers":i.Protection[0].Barriers,"Coordinate":i.SpotLocation[0].IntrinsicCoord}
     
     if visualization.Visualization[0].SpotElementProjection != None:
         for i in visualization.Visualization[0].SpotElementProjection:
             if "lcr" in i.RefersToElement:
-                levelCrossingsIS[i.RefersToElement] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
+                levelCrossingsIS[i.Name[0].Name] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
     
     return levelCrossingsIS
 
@@ -349,12 +470,12 @@ def detect_platforms(infrastructure,visualization):
     if infrastructure.Platforms != None:
         for i in infrastructure.Platforms[0].Platform:
             if i.Id not in platforms.keys():
-                platforms[i.Id] = {"Net":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef,"Direction":i.LinearLocation[0].ApplicationDirection,"Value":i.Length[0].Value}
+                platforms[i.Name[0].Name] = {"Net":i.LinearLocation[0].AssociatedNetElement[0].NetElementRef,"Direction":i.LinearLocation[0].ApplicationDirection,"Value":i.Length[0].Value}
     
     if visualization.Visualization[0].SpotElementProjection != None:
         for i in visualization.Visualization[0].SpotElementProjection:
             if "plf" in i.RefersToElement:
-                platforms[i.RefersToElement] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
+                platforms[i.Name[0].Name] |= {"Position":[int(i.Coordinate[0].X[:-4]),int(i.Coordinate[0].Y[:-4])]}
                 
     #print(platforms)
     return platforms
@@ -930,17 +1051,47 @@ def create_railJoint(trainDetectionElements):
     return railJoint
 
 # Export routes to file and object
-def export_routes(file,routes,object):
+def export_routes(file,routes,object,example):
+    new_table = {}
+
+    #new_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
+
     with open(file, "w") as f: 
         #print(semaphores)
         for route in routes:
-            f.write(f'route_{route} [{routes[route]["Start"]} {routes[route]["Way"]} {routes[route]["End"]}]:\n')
+            signal_start = routes[route]["Start"].replace('sig','S')
+            signal_end = routes[route]["End"].replace('sig','S')
+            way = routes[route]["Way"]
+            net_start = routes[route]["Path"][0]
+            net_end = routes[route]["Path"][-1]
+
+            switch =  '-'.join(i for i in routes[route]["Switches"]) if routes[route]["Switches"] else ''
+
+            platform =  routes[route]["Platforms"][0] if routes[route]["Platforms"] else ''
+            crossing = routes[route]["Crossings"][0] if routes[route]["Crossings"] else ''
+            f.write(f'route_{route} [{signal_start} {way} {signal_end}]:\n')
+            
+            new_table[int(route)] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
+
             f.write(f'\tPath: {routes[route]["Path"]}\n')
             if routes[route]["Switches"]:
                 f.write(f'\tSwitches: {routes[route]["Switches"]}\n')
             if routes[route]["Platforms"]:
                 f.write(f'\tPlatforms: {routes[route]["Platforms"]}\n')
+            if routes[route]["Crossings"]:
+                f.write(f'\tCrossings: {routes[route]["Crossings"]}\n')
         f.close()
+
+    with open("C:\PhD\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
+        i = 0
+        f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
+        for route in new_table:
+            i = i + 1
+            f.write(f'\nR_{i:02} , {new_table[route]["signal_start"]} , {new_table[route]["signal_end"]} , {new_table[route]["way"]} , {new_table[route]["net_start"]}-{new_table[route]["net_end"]} , {new_table[route]["switch"]} , {new_table[route]["platform"]} , {new_table[route]["crossing"]}')
+        
+        f.close()
+
+    return new_table
 
 # Calculate intrindic coordinate
 def calculate_intrinsic_coordinate(position,points):
@@ -1083,14 +1234,12 @@ def get_sem_graph(netPaths,signals,signals_in_node):
 
     return sem_graph
 
-
 # Detect the routes
-def detect_routes(signals,netPaths,switchesIS,platforms):
+def detect_routes(signals,netPaths,switch_net,platform_net,crossing_net):
     routes = {}
     #print(netPaths)
     signals_in_node = find_semaphores_in_node(signals)
     #print(signals_in_node)
-
     #for path in netPaths:
     #    print(f'{path} {netPaths[path]}')
 
@@ -1122,9 +1271,11 @@ def detect_routes(signals,netPaths,switchesIS,platforms):
                     route += 1
                     #print(f'Route_{route} : {start_signal} to {end_signal}')
                     paths = [start_node]
-                    switches = find_switches_in_the_path(paths,switchesIS)
-                    platform = find_platforms_in_the_path(paths,platforms)
-                    routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platform}
+                    crossing = ''
+                    switches = find_switches_in_the_path(paths,switch_net)
+                    platform = find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal)
+                    crossing = find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal)
+                    routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platform,'Crossings':crossing}
                     continue
     
         # Find all the next nodes
@@ -1142,11 +1293,14 @@ def detect_routes(signals,netPaths,switchesIS,platforms):
             #print(f'{sig} {way} {start_node} {end_nodes[node]} {end_signal} {paths}')
 
             # Find switches within the path
-            switches = find_switches_in_the_path(paths[node],switchesIS)
-            platform = find_platforms_in_the_path(paths[node],platforms)
+            crossing = ''
+            switches = find_switches_in_the_path(paths[node],switch_net)
+            platform = find_platforms_in_the_path(paths[node],platform_net,signals,start_signal,end_signal)
+            crossing = find_crossings_in_the_path(paths[node],crossing_net,signals,start_signal,end_signal)
+                    
             route += 1
             #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
-            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform}
+            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform,'Crossings':crossing}
 
         if len(netPaths) == 53:
             if sig == 'sig32':
@@ -1192,25 +1346,56 @@ def find_shortest_path(graph, start, end, path=[]):
                     shortest = newpath
     return shortest
 
-def find_switches_in_the_path(path,switchesIS):
+def find_switches_in_the_path(path,switch_net):
     switches = []
+    #print(path)
+    #print(switch_net)
     
-    for i in switchesIS:
-        #print(i,switchesIS[i])
-        if switchesIS[i]['Node'] in path:
-            switches.append(i)
-    
+    for i in switch_net:
+        if switch_net[i]['main'] in path and switch_net[i]['normal'] in path:
+            switches.append(i+"_N")
+        if switch_net[i]['main'] in path and switch_net[i]['reverse'] in path:
+            switches.append(i+"_R")
+
+    #print(switches)
     return switches
 
-def find_platforms_in_the_path(path,platforms):
+def find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal):
     platform = []
-    
-    for i in platforms:
-        #print(i,platforms[i])
-        if platforms[i]['Net'] in path:
-            platform.append(i)
-    
+    #print(platform_net)
+    #print(paths)
+    for i in platform_net:
+        #print(platform_net[i])
+        if platform_net[i]['net'] in paths:
+            start_pos = signals[start_signal]["Position"][0]
+            end_pos = signals[end_signal]["Position"][0]
+            plat_pos = platform_net[i]['x']
+
+            #print(f'{start_pos} {end_pos} {plat_pos}')
+            if (start_pos < plat_pos and end_pos > plat_pos) or (start_pos > plat_pos and end_pos < plat_pos): 
+                platform.append(i)
+ 
+    #print(platform)
     return platform
+
+def find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal):
+    crossing = []
+    
+    #print(platform_net)
+    print(paths)
+    for i in crossing_net:
+        #print(platform_net[i])
+        if crossing_net[i]['net'] in paths:
+            start_pos = signals[start_signal]["Position"][0]
+            end_pos = signals[end_signal]["Position"][0]
+            cross_pos = crossing_net[i]['x']
+
+            print(f'{start_pos} {end_pos} {cross_pos}')
+            if (start_pos < cross_pos and end_pos > cross_pos) or (start_pos > cross_pos and end_pos < cross_pos): 
+                crossing.append(i)
+ 
+    #print(crossing)
+    return crossing
 
 def find_path_between_nodes(start_node,end_nodes,netPaths,way):
     
@@ -2609,7 +2794,7 @@ def arrow_simplification(signals,nodes,sequence):
     #    print(signal,signals[signal])    
 
 ##%%%
-def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
+def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_table = {},example =1,config = [1,1,1,1,1,1,1,1,1,1]):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
@@ -2652,7 +2837,6 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
 
     #find_way(signals,nodes,config)
     
-
     #for i in netPaths:
     #    print(i,netPaths[i])
     #move_signals(signals,nodes,True)
@@ -2660,11 +2844,22 @@ def analyzing_object(object,sequence,config = [1,1,1,1,1,1,1,1,1,1]):
     export_signal("C:\PhD\RailML\\Signalling.RNA",signals,object)
     
     print(" Detecting Routes --> Routes.RNA")
-    routes = detect_routes(signals,netPaths,switchesIS,platforms)
-    export_routes("C:\PhD\RailML\\Routes.RNA",routes,object)
+    routes = detect_routes(signals,netPaths,switch_net,platform_net,crossing_net)
+    new_table = export_routes("C:\PhD\RailML\\Routes.RNA",routes,object,example)
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
 
+
+    #validate_tables(old_table,new_table)
+
+
+
+
+
     return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}']
-# %%
-#
+
+
+def validate_tables(old_table,new_table):
+
+    for route in old_table:
+        print(f'R_{route:02} | {old_table[route]["signal_start"]}-{old_table[route]["signal_end"]} [{old_table[route]["net_start"]}-{old_table[route]["net_end"]}]')
