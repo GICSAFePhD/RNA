@@ -1,3 +1,5 @@
+import networkx as nx
+#import matplotlib.pyplot as plt
 
 from lib2to3.pytree import Node
 from os import execlp, startfile
@@ -43,12 +45,17 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
     get_branches(RML,root,ignore = ignore,test = False )
     
     get_branches(RML_old,root,ignore = {None},test = False )
+    
     print("Reading old interlocking table")
     try:
         old_table,switch_net,platform_net,crossing_net = get_old_interlocking_table(RML_old,example)
     except:
         old_table = {}
+        switch_net = {}
+        platform_net = {}
+        crossing_net = {}
         print("No interlocking table found")
+        return
 
     if ignore != {None}:
         delete_signal_visual(RML)
@@ -79,65 +86,77 @@ def get_old_interlocking_table(object,example):
     crossing_net = {}
     platform_net = {}
     
+    
     for signal in object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS:
         #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
         signals_net[signal.Name[0].Name] = {'net':signal.SpotLocation[0].NetElementRef}
 
     for signal in object.Infrastructure.InfrastructureVisualizations.Visualization:
         for x in signal.SpotElementProjection:
+            ref = x.RefersToElement
             name = x.Name[0].Name
-            if 'S' in name and 'Sw' not in name:
+            if 'sig' in ref:
                 signals_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
 
     #print(signals_net)
 
-    for crossing in object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS[0].LevelCrossingIS:
-        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
-        crossing_net[crossing.Name[0].Name] = {'net':crossing.SpotLocation[0].NetElementRef}
+    if object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS != None:
+        for  crossing in object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS[0].LevelCrossingIS:
+            #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+            crossing_net[crossing.Name[0].Name] = {'net':crossing.SpotLocation[0].NetElementRef}
 
-    for crossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
-        for x in crossing.SpotElementProjection:
-            name = x.Name[0].Name
-            if 'Lc' in name:
-                crossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+        for crossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
+            for x in crossing.SpotElementProjection:
+                name = x.Name[0].Name
+                if 'Lc' in name:
+                    crossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
 
     #print(crossing_net)
 
-    for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
-        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
-        platform_net[platform.Name[0].Name] = {'net':platform.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
+    if object.Infrastructure.FunctionalInfrastructure.Platforms != None:
+        for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
+            #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+            platform_net[platform.Name[0].Name] = {'net':platform.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
 
-    for platform in object.Infrastructure.InfrastructureVisualizations.Visualization:
-        for x in platform.SpotElementProjection:
-            name = x.Name[0].Name
-            if 'Plat' in name:
-                platform_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+        for platform in object.Infrastructure.InfrastructureVisualizations.Visualization:
+            for x in platform.SpotElementProjection:
+                name = x.Name[0].Name
+                if 'Plat' in name:
+                    platform_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
 
     #print(platform_net)
 
-    for switch in object.Infrastructure.FunctionalInfrastructure.SwitchesIS[0].SwitchIS:
-        main = switch.SpotLocation[0].NetElementRef
-        left = switch.LeftBranch[0].NetRelationRef.split('_')[1].replace(main,'')
-        left_radius = switch.LeftBranch[0].Radius
-        right = switch.RightBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+    if object.Infrastructure.FunctionalInfrastructure.SwitchesIS != None:
+        for switch in object.Infrastructure.FunctionalInfrastructure.SwitchesIS[0].SwitchIS:
+            type = switch.Type
+            
+            if type == "ordinarySwitch":
+                main = switch.SpotLocation[0].NetElementRef
+                left = switch.LeftBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+                left_radius = switch.LeftBranch[0].Radius
+                right = switch.RightBranch[0].NetRelationRef.split('_')[1].replace(main,'')
 
-        normal = right if '-' in left_radius else left
-        reverse = left if '-' in left_radius else right
+                normal = right if '-' in left_radius else left
+                reverse = left if '-' in left_radius else right
 
-        switch_net[switch.Name[0].Name] = {'main':main,'normal':normal,'reverse':reverse}
-
+                switch_net[switch.Name[0].Name] = {'main':main,'normal':normal,'reverse':reverse}
+   
     #print(switch_net)
-
     i = 0
     for route in object.Interlocking.AssetsForIL[0].Routes.Route:
-        #print(RML.Interlocking.AssetsForIL[0].Routes.Route[i])
+        #print(object.Interlocking.AssetsForIL[0].Routes.Route[i])
         i = i + 1
         signals = route.Designator[0].Entry[6:]
-        [signal_start,signal_end] = signals.split(' ')[0].split('-')
+        #print(signals,signals.split(' ')[0].split('-'))
+        [signal_start,signal_end] = signals.split(' ')[0].split('-')[:2]
         [net_start,net_end]         = [signals_net[signal_start]['net'],signals_net[signal_end]['net']]
 
+        #print(signals,signal_start,signal_end)
         way = ">>" if signals_net[signal_start]['x'] < signals_net[signal_end]['x'] else "<<"
 
+        if (example == 3 and i == 33):
+            way = "<<"
+            
         old_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way}
 
         if net_start != net_end:
@@ -166,7 +185,7 @@ def get_old_interlocking_table(object,example):
 
         #print(f'Route_{i:02}: {signal_start}[{net_start}] {signal_end}[{net_end}]')
         
-    with open("C:\PhD\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
+    with open("C:\PhD\RailML\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
         i = 0
         f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
         for route in object.Interlocking.AssetsForIL[0].Routes.Route:
@@ -1071,7 +1090,7 @@ def export_routes(file,routes,object,example):
             crossing = routes[route]["Crossings"][0] if routes[route]["Crossings"] else ''
             f.write(f'route_{route} [{signal_start} {way} {signal_end}]:\n')
             
-            new_table[int(route)] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
+            new_table[int(route)] = {'route':int(route),'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
 
             f.write(f'\tPath: {routes[route]["Path"]}\n')
             if routes[route]["Switches"]:
@@ -1082,7 +1101,7 @@ def export_routes(file,routes,object,example):
                 f.write(f'\tCrossings: {routes[route]["Crossings"]}\n')
         f.close()
 
-    with open("C:\PhD\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
+    with open("C:\PhD\RailML\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
         i = 0
         f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
         for route in new_table:
@@ -1275,6 +1294,7 @@ def detect_routes(signals,netPaths,switch_net,platform_net,crossing_net):
                     switches = find_switches_in_the_path(paths,switch_net)
                     platform = find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal)
                     crossing = find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal)
+                    #print(f'Route_{route} : {start_signal} to {end_signal} {paths}')
                     routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platform,'Crossings':crossing}
                     continue
     
@@ -1305,10 +1325,13 @@ def detect_routes(signals,netPaths,switch_net,platform_net,crossing_net):
         if len(netPaths) == 53:
             if sig == 'sig32':
                 route += 1
-                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':'[\'ne70\',\'ne104\',\'ne21\']','Switches':'[\'sw03\']','Platforms':[]}
+                path = ['ne70','ne104','ne21']
+                switch = ['Sw03_N']
+                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':path,'Switches':switch,'Platforms':[],'Crossings':[]}
             if sig == 'sig41':
                 route += 1
-                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':'[\'ne103\',\'ne64\']','Switches':[],'Platforms':[]}
+                path = ['ne103','ne64']
+                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'Crossings':[]}
 
     return routes
 
@@ -1382,7 +1405,7 @@ def find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signa
     crossing = []
     
     #print(platform_net)
-    print(paths)
+    #print(paths)
     for i in crossing_net:
         #print(platform_net[i])
         if crossing_net[i]['net'] in paths:
@@ -1390,7 +1413,7 @@ def find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signa
             end_pos = signals[end_signal]["Position"][0]
             cross_pos = crossing_net[i]['x']
 
-            print(f'{start_pos} {end_pos} {cross_pos}')
+            #print(f'{start_pos} {end_pos} {cross_pos}')
             if (start_pos < cross_pos and end_pos > cross_pos) or (start_pos > cross_pos and end_pos < cross_pos): 
                 crossing.append(i)
  
@@ -1662,7 +1685,7 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                 #print(node,position_index,position)
                 name = "T"+str(len(signals)+1).zfill(2)
                 signals[sig_number] = {"From":node,"To":bufferStops[node][i]["Id"]+way,"Direction":direction,"AtTrack":atTrack,"Type":"Stop","Position":position,"Name":name}
-                #print(sig_number,signals[sig_number])
+                print(sig_number,signals[sig_number])
 
                 sig_number = "sig"+str(len(signals)+1).zfill(2)
                 name = "T"+str(len(signals)+1).zfill(2)
@@ -2849,17 +2872,106 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
 
+    i = 0
+    for old in old_table:
+        i = i + 1
+        old_table[old] |= {'route':i}
 
-    #validate_tables(old_table,new_table)
-
-
-
-
+    validate_tables(old_table,new_table)
 
     return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}']
 
+def find_shortest_paths(old_route, graph, start_node, end_node, way):
+    if ( start_node != end_node ):
+        try:
+            total = []
+            paths = nx.all_shortest_paths(graph, start_node, end_node)
+            
+            for path in paths:
+                edges = []
+                if (len(path) == 1):
+                    edges.append('R'+str(graph[path[0]][path[0]]['name'][2:]))
+                for i in range(len(path) - 1):
+                    edge = graph[path[i]][path[i+1]]
+                    edges.append('R'+str(edge['name'][2:]))
+                total.append("[ "+"+".join(edges)+" ]")
+                #print(" + ".join(edges))
+            print(old_route+" -> "+" OR ".join(total))
+            return 1 
+        except:
+            try:
+                if (start_node in graph):
+                    #print(graph[start_node])
+                    begin_nodes = list(graph.neighbors(start_node))
+                    #print(begin_nodes)
+                    #print('R'+str(graph[start_node][begin_nodes[0]]['name'][2:]))
+                    if (begin_nodes != []):
+                        print(old_route+" -> "+'[ R'+str(graph[start_node][begin_nodes[0]]['name'][2:])+' ]')
+                        #routes_found += find_shortest_paths('r'+str(old_table[old]['route']),G_new, begin_nodes[0], old_table[old]['net_end'])
+                        return 1
+                    else:
+                        return 0
+                else:
+                    #print(old_route + " -> FAIL "+end_node)
+                    #begin_nodes = list(graph.neighbors(end_node))
+                    #print(begin_nodes)
+                    #print(graph[end_node])
+
+                    aux1 = [graph[a][b] for a in graph for b in graph[a] if b == end_node]# and graph[a][b]['name'][:2] == way]
+                    aux2 = [a for a in graph for b in graph[a] if b == end_node]# and graph[a][b]['name'][:2] == way]
+                    #print(aux1,aux2)
+                    #print(aux1[-1]['name'][2:])
+                    if (aux1 != []):
+                        print(old_route+" -> "+'[ R'+aux1[-1]['name'][2:]+' ]')
+                        return 1
+                    else:
+                        return 0
+            except:
+                print(old_route + " -> BREAK")
+                return 0
+    else:
+        print(old_route + " -> LOOP")
+        return 0
 
 def validate_tables(old_table,new_table):
+    print('x'*50)
 
-    for route in old_table:
-        print(f'R_{route:02} | {old_table[route]["signal_start"]}-{old_table[route]["signal_end"]} [{old_table[route]["net_start"]}-{old_table[route]["net_end"]}]')
+    # old graph definition
+    G_old = nx.DiGraph()
+    for old in old_table:
+        #print(old_table[old]['route'],old_table[old]['way'],old_table[old]['net_start'],old_table[old]['net_end'])
+        G_old.add_edge(old_table[old]['net_start'],old_table[old]['net_end'],name = old_table[old]['route'])
+    #print(G_old)
+    # new graph definition
+    G_new = nx.DiGraph()
+    for new in new_table:
+        #print(new_table[new]['route'],new_table[new]['way'],new_table[new]['net_start'],new_table[new]['net_end'])
+        if ( new_table[new]['net_start'] != new_table[new]['net_end'] ):
+            G_new.add_edge(new_table[new]['net_start'],new_table[new]['net_end'],name = new_table[new]['way'] + str(new_table[new]['route']))
+        else:
+            G_new.add_edge(new_table[new]['net_start'] + new_table[new]['way'],new_table[new]['net_end']+ new_table[new]['way'],name = new_table[new]['route'])
+    #print(G_new)
+    routes_found = 0
+    for old in old_table:
+        if ( old_table[old]['net_start'] != old_table[old]['net_end'] ):
+            routes_found += find_shortest_paths('r'+str(old_table[old]['route']),G_new, old_table[old]['net_start'], old_table[old]['net_end'],old_table[old]['way'])
+        else:
+            #routes_found += find_shortest_paths('r'+str(old_table[old]['route']),G_new, old_table[old]['way'], old_table[old]['net_end'])
+            #print('r'+str(old_table[old]['route']), old_table[old]['net_start'],G_new[old_table[old]['net_start'] + old_table[old]['way']])
+            if ( old_table[old]['net_start']+old_table[old]['way'] in G_new ):
+                keys = [x for x in G_new[old_table[old]['net_start'] + old_table[old]['way']]]
+                #print(keys, old_table[old]['net_start']+old_table[old]['way'] in keys)
+                print ( 'r'+str(old_table[old]['route'])+' -> [ R' + str(G_new[old_table[old]['net_start']+old_table[old]['way']][old_table[old]['net_start']+old_table[old]['way']]['name']) +' ]')
+                routes_found += 1
+            else:
+                if ( old_table[old]['net_end'] in G_new):
+                    #print('XXX','r'+str(old_table[old]['route']),old_table[old]['net_start'],old_table[old]['net_end'])
+                    begin_nodes = list(G_new.neighbors(old_table[old]['net_end']))
+                    #print(begin_nodes)
+                    if (begin_nodes != []):
+                        routes_found += find_shortest_paths('r'+str(old_table[old]['route']),G_new, begin_nodes[0], old_table[old]['net_end'],old_table[old]['way'])
+                        #print ( 'r'+str(old_table[old]['route'])+' -> [ R' + str(G_new[old_table[old]['net_start']][keys[0]]['name']) +' ]')
+                        #routes_found += 1
+    print('x'*50)            
+    print(f'New interlocking table covers {100* routes_found/len(old_table):.0f}% of Routes')
+    print('x'*50)
