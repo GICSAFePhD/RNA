@@ -72,9 +72,13 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
         f.write('<railML xmlns="https://www.railml.org/schemas/3.1" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:gml="http://www.opengis.net/gml/3.2/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.railml.org/schemas/3.1 https://www.railml.org/schemas/3.1/railml3.xsd" version="3.1">\n')
 
         save_xml(RML,f,ignore = {None}, test = False)
-        
         f.close()
 
+    try:
+        raimlFile = load_xml(OUTPUT_FILE)
+        print(f'railML file syntax validated: {raimlFile}')
+    except:
+        print('railML file corrupted')
     return x
 
 def get_old_interlocking_table(object,example):
@@ -2879,6 +2883,8 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
 
     validate_tables(old_table,new_table)
 
+    validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,platforms)
+
     return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}']
 
 def find_shortest_paths(old_route, graph, start_node, end_node, way):
@@ -2974,4 +2980,73 @@ def validate_tables(old_table,new_table):
                         #routes_found += 1
     print('x'*50)            
     print(f'New interlocking table covers {100* routes_found/len(old_table):.0f}% of Routes')
+
+def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,platforms):
+
+    print('x'*50)
+    signals_in_node = find_semaphores_in_node(signals)
+
+    switch_start_unprotected = []
+    switch_normal_unprotected = []
+    switch_branch_unprotected = []
+
+    for switch in switch_net:
+        switch_start_unprotected.append(switch_net[switch]['main'])
+        switch_normal_unprotected.append(switch_net[switch]['normal'])
+        switch_branch_unprotected.append(switch_net[switch]['reverse'])
+
+    switch_start_unprotected = list(set(switch_start_unprotected))
+    switch_normal_unprotected = list(set(switch_normal_unprotected))
+    switch_branch_unprotected = list(set(switch_branch_unprotected))
+
+    switch_start_unprotected_only = [i for i in switch_start_unprotected if i not in switch_branch_unprotected]
+    switch_normal_unprotected_only = [i for i in switch_normal_unprotected if i not in switch_branch_unprotected]
+    
+    #print(switch_start_unprotected,switch_normal_unprotected,switch_branch_unprotected,switch_start_unprotected_only,switch_normal_unprotected_only)
+     
+    for node in signals_in_node:
+        if node in switch_start_unprotected_only:
+            switch_start_unprotected_only.remove(node)
+        if node in switch_normal_unprotected_only:
+            switch_normal_unprotected_only.remove(node)
+
+    #print(switch_start_unprotected_only,switch_normal_unprotected_only)
+    
+    stops = 0
+    for signal in signals:
+        if 'T' in signals[signal]['Name']:
+            stops += 1
+
+    crossings = 0
+    for signal in signals:
+        if 'X' in signals[signal]['Name']:
+            crossings += 1
+
+    stations = 0
+    for signal in signals:
+        if 'P' in signals[signal]['Name']:
+            stations += 1
+
+    if ( len(bufferStops) > stops ):
+        print(f'Stops unprotected -> Railway principles failed')
+        print('x'*50)
+        return
+
+    if ( len(levelCrossingsIS) > crossings ):
+        print(f'Level crossings unprotected -> Railway principles failed')
+        print('x'*50)
+        return
+    
+    if ( len(platforms) > stations ):
+        print(f'Platforms unprotected -> Railway principles failed')
+        print('x'*50)
+        return
+    
+    if ( switch_start_unprotected_only != [] or switch_normal_unprotected_only != [] ):
+        print(f'Switches unprotected -> Railway principles failed')
+        print('x'*50)
+        return
+    
+    print(f'Railway elements fully protected -> Railway principles accepted')      
+
     print('x'*50)
