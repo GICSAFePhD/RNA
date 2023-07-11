@@ -2169,7 +2169,7 @@ def reduce_signals(signals,signal_placement):
                 a_position = signals[signal_a]["Position"][0]
                 b_position = signals[signal_b]["Position"][0]
 
-                if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] != "S" and abs(a_position-b_position) == 0):
+                if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] != "S" and abs(a_position-b_position) < 100):
                     if signal_a not in delete and signal_b not in delete:
                         print(f'removing {signal_a} for {signal_b}')
                         delete.append(signal_a)
@@ -2687,7 +2687,7 @@ def order_nodes_points(nodes):
         #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
 
         #print(f'--- {node} {nodes[node]["All"]}')
-        #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
+        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -3032,12 +3032,12 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
         print('x'*50)
         return
 
-    if ( len(levelCrossingsIS) > crossings ):
+    if ( len(levelCrossingsIS) > stations+crossings ):
         print(f'Level crossings unprotected -> Railway principles failed')
         print('x'*50)
         return
     
-    if ( len(platforms) > stations ):
+    if ( len(platforms) > stations+crossings ):
         print(f'Platforms unprotected -> Railway principles failed')
         print('x'*50)
         return
