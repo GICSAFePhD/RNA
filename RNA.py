@@ -3017,27 +3017,45 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
         if 'T' in signals[signal]['Name']:
             stops += 1
 
-    crossings = 0
-    for signal in signals:
-        if 'X' in signals[signal]['Name']:
-            crossings += 1
+    sem_positions =  [signals[x]['Position'] for x in signals]
+    crossing_positions = [levelCrossingsIS[x]['Position'] for x in levelCrossingsIS]
+    platform_positions = [platforms[x]['Position'] for x in platforms]
 
-    stations = 0
-    for signal in signals:
-        if 'P' in signals[signal]['Name']:
-            stations += 1
+    #print(sem_positions)
+    #print(crossing_positions)
+
+    crossings_protected = 0
+    for xros in crossing_positions:
+        for sem in sem_positions:
+            if (abs(sem[1]) == abs(xros[1])):
+                if (abs(sem[0]-xros[0]) < 500):
+                    crossings_protected += 1
+                    break  
+
+    #print(crossings_protected)
+
+    #print(platform_positions)
+    platforms_protected = 0
+    for plat in platform_positions:
+        for sem in sem_positions:
+            if (abs(sem[1]) == abs(plat[1])):
+                if (abs(sem[0]-plat[0]) < 500):
+                    platforms_protected += 1
+                    break  
+                  
+    #print(platforms_protected)
 
     if ( len(bufferStops) > stops ):
         print(f'Stops unprotected -> Railway principles failed')
         print('x'*50)
         return
 
-    if ( len(levelCrossingsIS) > stations+crossings ):
+    if ( len(levelCrossingsIS) > crossings_protected ):
         print(f'Level crossings unprotected -> Railway principles failed')
         print('x'*50)
         return
     
-    if ( len(platforms) > stations+crossings ):
+    if ( len(platforms) > platforms_protected ):
         print(f'Platforms unprotected -> Railway principles failed')
         print('x'*50)
         return
