@@ -2184,6 +2184,12 @@ def reduce_signals(signals,signal_placement):
                         print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
+                if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "X" and abs(a_position-b_position) < 250):
+                    if signal_a not in delete and signal_b not in delete and signals[signal_b]["Name"][0] == "P":
+                        print(f'----removing {signal_b} for {signal_a}')
+                        delete.append(signal_b)
+
+    
                 if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "J" and abs(a_position-b_position) < 500):
                     if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H" and signals[signal_b]["Name"][0] != "T" and signal_a not in delete:
                         print(f'removing {signal_b} for {signal_a}')
