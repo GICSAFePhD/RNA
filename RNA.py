@@ -17,7 +17,8 @@ arrow = {1:[0,1,0,0,1,1,0,0,0,1,1],
          5:[0,0,0,0,1,1,1,1],
          6:[0,0,0,0,0,0,0,0,0,1,1],
          7:[0,1,1,0,1,1,0],
-         8:[0,1,1,0,0]}
+         8:[0,1,1,0,0],
+         9:[0,0,0,0,0,0,0]}
 
 #%%%
 RML_old = railML.railML()
@@ -55,7 +56,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
         platform_net = {}
         crossing_net = {}
         print("No interlocking table found")
-        return
+        #return
 
     if ignore != {None}:
         delete_signal_visual(RML)
@@ -2290,6 +2291,15 @@ def reduce_signals(signals,signal_placement):
                                 print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)   
 
+                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "B":
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_a} for {signal_b}')
+                                delete.append(signal_a)
+                        if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "B":
+                            if signal_a not in delete and signal_b not in delete:
+                                print(f'removing {signal_b} for {signal_a}')
+                                delete.append(signal_b)
+
     for delete_signal in delete:
         del signals[delete_signal]
 
@@ -2618,8 +2628,11 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     signal_placement[node]["Prev"].append(prev_place)
   
     # Simplify closest signal placements
-    signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist)
-  
+    try:
+        signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms_node,dist)
+    except:
+        print('Zonas criticas no simplificadas')
+
     # Deleting the signal placements with only no members
     for i in signal_placement:
         if signal_placement[i]["Prev"] == []:
@@ -2635,6 +2648,9 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
     #print(signal_placement)
     #print(crossing_nodes)
     #print(platforms_node)
+
+    n_removed = []
+    p_removed = []
 
     for node in signal_placement:
         old_next = signal_placement[node]["Next"]
@@ -2660,9 +2676,13 @@ def signal_simplification_by_proximity(signal_placement,crossing_nodes,platforms
                     if (abs(platform_pos-crossing_pos) < distance):
                         if n in n_p_next and p in n_p_prev:
                             print(f'remove_a {n} {p}')
-                            n_p_next.remove(n)
-                            n_p_prev.remove(p)
-
+                            if n in n_p_next and n not in n_removed:
+                                n_p_next.remove(n)
+                                n_removed.append(n)
+                            if p in n_p_prev and p not in p_removed:
+                                n_p_prev.remove(p)
+                                p_removed.append(p)
+                         
                     if (platform_pos < n[0] < crossing_pos or crossing_pos < n[0] < platform_pos) and (platform_pos < p[0] < crossing_pos or crossing_pos < p[0] < platform_pos):
                         continue
                     else:
@@ -2984,8 +3004,11 @@ def validate_tables(old_table,new_table):
                         routes_found += find_shortest_paths('r'+str(old_table[old]['route']),G_new, begin_nodes[0], old_table[old]['net_end'],old_table[old]['way'])
                         #print ( 'r'+str(old_table[old]['route'])+' -> [ R' + str(G_new[old_table[old]['net_start']][keys[0]]['name']) +' ]')
                         #routes_found += 1
-    print('x'*50)            
-    print(f'New interlocking table covers {100* routes_found/len(old_table):.0f}% of Routes')
+    print('x'*50)
+    if len(old_table) > 0:            
+        print(f'New interlocking table covers {100* routes_found/len(old_table):.0f}% of Routes')
+    else:
+        print(f'New interlocking table covers {len(new_table)} Routes')
 
 def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,platforms):
 
@@ -3045,7 +3068,7 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
     for plat in platform_positions:
         for sem in sem_positions:
             if (abs(sem[1]) == abs(plat[1])):
-                if (abs(sem[0]-plat[0]) < 500):
+                if (abs(sem[0]-plat[0]) < 700):
                     platforms_protected += 1
                     break  
                   
