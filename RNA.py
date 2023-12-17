@@ -29,7 +29,7 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
     print(f'{sequence}')
 
     if test:
-        print("#"*20+" Starting Railway Network Analyzer "+"#"*20)
+        print("#"*50+" Starting Railway Network Analyzer "+"#"*50)
     
     if test:
         print("Reading .railML file")
@@ -190,7 +190,7 @@ def get_old_interlocking_table(object,example):
 
         #print(f'Route_{i:02}: {signal_start}[{net_start}] {signal_end}[{net_end}]')
         
-    with open("C:\PhD\RailML\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
+    with open("App\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
         i = 0
         f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
         for route in object.Interlocking.AssetsForIL[0].Routes.Route:
@@ -1075,7 +1075,7 @@ def create_railJoint(trainDetectionElements):
     return railJoint
 
 # Export routes to file and object
-def export_routes(file,routes,object,example):
+def export_routes(file,routes,object,example,switchesIS):
     new_table = {}
 
     #new_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
@@ -1106,7 +1106,72 @@ def export_routes(file,routes,object,example):
                 f.write(f'\tCrossings: {routes[route]["Crossings"]}\n')
         f.close()
 
-    with open("C:\PhD\RailML\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
+    # Create routes for AssetsForIL
+    if (object.Interlocking.AssetsForIL != None):
+        # Create Routes
+        AssetsForIL = object.Interlocking.AssetsForIL[0]
+        AssetsForIL.create_Routes()
+        
+        rts = AssetsForIL.Routes
+
+        # Add new route for each route
+        for route in routes:
+            rts.create_Route()
+
+            signal_start = routes[route]["Start"].replace('sig','S')
+            signal_end = routes[route]["End"].replace('sig','S')
+
+            #print(route,routes[route])
+
+            # Create atributes
+            rts.Route[route-1].Id = f'rt_{routes[route]["Start"]}_{routes[route]["End"]}'
+            if routes[route]["Switches"] != []:
+                for sw in routes[route]["Switches"]:
+                    rts.Route[route-1].Id = rts.Route[route-1].Id + f'_{sw.replace('_', '')}'
+
+            # Create Designator
+            rts.Route[route-1].create_Designator()
+            rts.Route[route-1].Designator[0].Register = "_Example"     # Register="_Example" 
+            rts.Route[route-1].Designator[0].Entry = f'Route {signal_start}-{signal_end}'
+            if routes[route]["Switches"] != []:
+                rts.Route[route-1].Designator[0].Entry = rts.Route[route-1].Designator[0].Entry + f' ({"-".join(sw for sw in routes[route]["Switches"]).replace('_','')})'
+            
+            # Create handlesRouteType
+            rts.Route[route-1].create_HandlesRouteType()
+            rts.Route[route-1].HandlesRouteType[0].Ref = "rt_main"   
+
+            # Create hasTvdSection
+            rts.Route[route-1].create_HasTvdSection()
+            rts.Route[route-1].HasTvdSection[0].Ref = "tvd_XX"              # TO BE DEFINED
+
+            # Create routeEntry
+            rts.Route[route-1].create_RouteEntry()
+            rts.Route[route-1].RouteEntry.Id = f'rts_{routes[route]["Start"]}_rt_{routes[route]["Start"]}_{routes[route]["End"]}'  
+            rts.Route[route-1].RouteEntry.create_RefersTo()
+            rts.Route[route-1].RouteEntry.RefersTo.Ref = f'il_{routes[route]["Start"]}'
+
+            # Create routeExit
+            rts.Route[route-1].create_RouteExit()
+            rts.Route[route-1].RouteExit.Id = f'rts_{routes[route]["End"]}_rt_{routes[route]["Start"]}_{routes[route]["End"]}'  
+            rts.Route[route-1].RouteExit.create_RefersTo()
+            rts.Route[route-1].RouteExit.RefersTo.Ref = f'il_{routes[route]["End"]}'
+
+            # Create FacingSwitchInPosition
+            i = 0
+            for sw in routes[route]["Switches"]:
+                direction = switchesIS[sw[:-2]]["ContinueCourse"] if sw[-1:] == "N" else switchesIS[sw[:-2]]["BranchCourse"]
+
+                rts.Route[route-1].create_FacingSwitchInPosition()
+                rts.Route[route-1].FacingSwitchInPosition[i].Id = f'rp_rt_{sw.replace("_","")[:-1]}_{rts.Route[route-1].Id}'
+                rts.Route[route-1].FacingSwitchInPosition[i].InPosition = direction
+                rts.Route[route-1].FacingSwitchInPosition[i].create_Designator()
+                rts.Route[route-1].FacingSwitchInPosition[i].Designator[0].Register = "_Example"
+                rts.Route[route-1].FacingSwitchInPosition[i].Designator[0].Entry = f'{sw.replace("_","")[:-1]} in {direction}'
+                rts.Route[route-1].FacingSwitchInPosition[i].create_RefersToSwitch()
+                rts.Route[route-1].FacingSwitchInPosition[i].RefersToSwitch.Ref = f'il_{sw.replace("_","")[:-1]}'
+                i = i + 1
+
+    with open("App\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
         i = 0
         f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
         for route in new_table:
@@ -2861,19 +2926,19 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
     print(" Analyzing infrastructure --> Infrastructure.RNA")
     borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements = analyzing_infrastructure(infrastructure,visualization,nodes)
 
-    infrastructure_file = "C:\PhD\RailML\\Infrastructure.RNA"
+    infrastructure_file = "App//Layouts//Example_"+str(example)+"//Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
     
     #for i in nodes:
     #    print(i,nodes[i])
     print(" Detecting Danger --> Safe_points.RNA")
     signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,config[8],config[9])
-    safe_point_file = "C:\PhD\RailML\\Safe_points.RNA"
+    safe_point_file = "App//Layouts//Example_"+str(example)+"//Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
     
     #print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
-    signals_file = "C:\PhD\RailML\\Dangers.RNA"
+    signals_file = "App//Layouts//Example_"+str(example)+"//Dangers.RNA"
     signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config)
     
     find_way(signals,nodes,config)
@@ -2890,15 +2955,15 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
 
     #find_way(signals,nodes,config)
     
-    #for i in netPaths:
-    #    print(i,netPaths[i])
+    #for i in switchesIS:
+    #    print(i,switchesIS[i])
     #move_signals(signals,nodes,True)
     
-    export_signal("C:\PhD\RailML\\Signalling.RNA",signals,object)
+    export_signal("App//Layouts//Example_"+str(example)+"//Signalling.RNA",signals,object)
     
     print(" Detecting Routes --> Routes.RNA")
     routes = detect_routes(signals,netPaths,switch_net,platform_net,crossing_net)
-    new_table = export_routes("C:\PhD\RailML\\Routes.RNA",routes,object,example)
+    new_table = export_routes("Routes.RNA",routes,object,example,switchesIS)
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
 
@@ -3031,7 +3096,7 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
     switch_start_unprotected_only = [i for i in switch_start_unprotected if i not in switch_branch_unprotected]
     switch_normal_unprotected_only = [i for i in switch_normal_unprotected if i not in switch_branch_unprotected]
     
-    #print(switch_start_unprotected,switch_normal_unprotected,switch_branch_unprotected,switch_start_unprotected_only,switch_normal_unprotected_only)
+    print(switch_start_unprotected,switch_normal_unprotected,switch_branch_unprotected,switch_start_unprotected_only,switch_normal_unprotected_only)
      
     for node in signals_in_node:
         if node in switch_start_unprotected_only:
@@ -3039,7 +3104,7 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
         if node in switch_normal_unprotected_only:
             switch_normal_unprotected_only.remove(node)
 
-    #print(switch_start_unprotected_only,switch_normal_unprotected_only)
+    print(switch_start_unprotected_only,switch_normal_unprotected_only)
     
     stops = 0
     for signal in signals:
