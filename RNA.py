@@ -540,8 +540,44 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                     #print(f'{sw_name}[{node}] : {continueCourse}|{branchCourse} : {direction} : {leftBranch}|{rightBranch}')
                 
                     switchesIS[sw_name] = {"Node":node,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
-                                        "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch
-                                        }
+                                        "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch}
+                
+                if type == "doubleSwitchCrossing":
+                    print("*"*100)
+
+                    straightBranch_A = i.StraightBranch[0].NetRelationRef#.split('_')[1]
+                    straightBranch_B = i.StraightBranch[1].NetRelationRef#.split('_')[1]
+                    turningBranch_A = i.TurningBranch[0].NetRelationRef#.split('_')[1]
+                    turningBranch_B = i.TurningBranch[1].NetRelationRef#.split('_')[1]
+
+                    straightBranch_1 = straightBranch_A if node in straightBranch_A else straightBranch_B
+                    turningBranch_1 = turningBranch_A if node in turningBranch_A else turningBranch_B
+                    straightBranch_2 = straightBranch_B if node in straightBranch_A else straightBranch_B
+                    turningBranch_2 = turningBranch_B if node in turningBranch_A else turningBranch_B
+
+                    node_1 = node
+
+                    #print(straightBranch_2.split('_')[1].split('ne')[1:],turningBranch_2.split('_')[1].split('ne')[1:])
+                    node_2 = ['ne'+x for x in straightBranch_2.split('_')[1].split('ne')[1:] if x in turningBranch_2.split('_')[1].split('ne')[1:]][0]
+
+                    #print (f'{sw_name} - {node} -> [{straightBranch_A}] [{straightBranch_B}] [{turningBranch_A}] [{turningBranch_B}]')
+
+                    print(f'{sw_name} - {node_1} -> {straightBranch_1} + {turningBranch_1}')
+                    print(f'{sw_name} - {node_2} -> {straightBranch_2} + {turningBranch_2}')
+
+                    continueCourse = "right"
+                    branchCourse = "left"
+
+                    switchesIS[sw_name+'A'] = {"Node":node_1,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                                        "Direction":direction,"LeftBranch":straightBranch_1,"RightBranch":turningBranch_1}
+
+                    switchesIS[sw_name+'B'] = {"Node":node_2,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                                        "Direction":direction,"LeftBranch":straightBranch_2,"RightBranch":turningBranch_2}
+                    
+                    print("*"*100)
+
+
+    #UPDATE POSITION FOR MULTISWITCHES
 
     if visualization.Visualization != None:
         for i in  visualization.Visualization[0].SpotElementProjection:
@@ -553,6 +589,13 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                     switchesIS[sw_name] |= {"Position":[pos_x,pos_y]}
                     #if ( pos_x == nodes[switchesIS[sw_name]["Node"]]["Begin"][0]) and pos_y == nodes[switchesIS[sw_name]["Node"]]["Begin"][1]):
                     #    nodes[switchesIS[sw_name]["Node"]]["Inverter"] = True
+                if sw_name+'A' in switchesIS:
+                    switchesIS[sw_name+'A'] |= {"Position":[pos_x,pos_y]}
+                if sw_name+'B' in switchesIS:
+                    switchesIS[sw_name+'B'] |= {"Position":[pos_x,pos_y]}
+
+    for x in switchesIS:
+        print(f'{x},{switchesIS[x]["LeftBranch"]} {switchesIS[x]["RightBranch"]}')
 
     return switchesIS
 
@@ -734,7 +777,8 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
             for j in switchesIS:
                 if i == switchesIS[j]["Node"]:
                     f.write(f'\tSwitches -> {j}\n')
-                    
+                    print(f'Switches -> {j} {identify_relations(switchesIS[j]["LeftBranch"])} {identify_relations(switchesIS[j]["RightBranch"])}\n')
+
                     left = identify_relations(switchesIS[j]["LeftBranch"])[:-1]
                     right = identify_relations(switchesIS[j]["RightBranch"])[:-1]
                     left.remove(i)
@@ -1106,6 +1150,13 @@ def export_routes(file,routes,object,example,switchesIS):
                 f.write(f'\tCrossings: {routes[route]["Crossings"]}\n')
         f.close()
 
+    #for route in routes:
+    #    if routes[route]["Switches"] != []:
+    #        print(route,routes[route])
+
+    for x in switchesIS:
+        print(x,switchesIS[x])
+
     # Create routes for AssetsForIL
     if (object.Interlocking.AssetsForIL != None):
         # Create Routes
@@ -1116,6 +1167,7 @@ def export_routes(file,routes,object,example,switchesIS):
 
         # Add new route for each route
         for route in routes:
+            #print(f'Create route{route}')
             rts.create_Route()
 
             signal_start = routes[route]["Start"].replace('sig','S')
@@ -1124,33 +1176,39 @@ def export_routes(file,routes,object,example,switchesIS):
             #print(route,routes[route])
 
             # Create atributes
+            #print('Create atributes')
             rts.Route[route-1].Id = f'rt_{routes[route]["Start"]}_{routes[route]["End"]}'
             if routes[route]["Switches"] != []:
                 for sw in routes[route]["Switches"]:
                     rts.Route[route-1].Id = rts.Route[route-1].Id + f'_{sw.replace('_', '')}'
 
             # Create Designator
+            #print('Create Designator')
             rts.Route[route-1].create_Designator()
             rts.Route[route-1].Designator[0].Register = "_Example"     # Register="_Example" 
             rts.Route[route-1].Designator[0].Entry = f'Route {signal_start}-{signal_end}'
-            if routes[route]["Switches"] != []:
+            if routes[route]["Switches"] != []: 
                 rts.Route[route-1].Designator[0].Entry = rts.Route[route-1].Designator[0].Entry + f' ({"-".join(sw for sw in routes[route]["Switches"]).replace('_','')})'
-            
+
             # Create handlesRouteType
+            #print('Create handlesRouteType')
             rts.Route[route-1].create_HandlesRouteType()
             rts.Route[route-1].HandlesRouteType[0].Ref = "rt_main"   
 
             # Create hasTvdSection
+            #print('Create hasTvdSection')
             rts.Route[route-1].create_HasTvdSection()
             rts.Route[route-1].HasTvdSection[0].Ref = "tvd_XX"              # TO BE DEFINED
 
             # Create routeEntry
+            #print('Create routeEntry')
             rts.Route[route-1].create_RouteEntry()
             rts.Route[route-1].RouteEntry.Id = f'rts_{routes[route]["Start"]}_rt_{routes[route]["Start"]}_{routes[route]["End"]}'  
             rts.Route[route-1].RouteEntry.create_RefersTo()
             rts.Route[route-1].RouteEntry.RefersTo.Ref = f'il_{routes[route]["Start"]}'
 
             # Create routeExit
+            #print('Create routeExit')
             rts.Route[route-1].create_RouteExit()
             rts.Route[route-1].RouteExit.Id = f'rts_{routes[route]["End"]}_rt_{routes[route]["Start"]}_{routes[route]["End"]}'  
             rts.Route[route-1].RouteExit.create_RefersTo()
@@ -1159,18 +1217,27 @@ def export_routes(file,routes,object,example,switchesIS):
             # Create FacingSwitchInPosition
             i = 0
             for sw in routes[route]["Switches"]:
-                direction = switchesIS[sw[:-2]]["ContinueCourse"] if sw[-1:] == "N" else switchesIS[sw[:-2]]["BranchCourse"]
-
+                
+                #print(f'{sw} Create FacingSwitchInPosition')
                 rts.Route[route-1].create_FacingSwitchInPosition()
                 rts.Route[route-1].FacingSwitchInPosition[i].Id = f'rp_rt_{sw.replace("_","")[:-1]}_{rts.Route[route-1].Id}'
-                rts.Route[route-1].FacingSwitchInPosition[i].InPosition = direction
+                
+                #print(f'{sw} Create Designator')
                 rts.Route[route-1].FacingSwitchInPosition[i].create_Designator()
                 rts.Route[route-1].FacingSwitchInPosition[i].Designator[0].Register = "_Example"
-                rts.Route[route-1].FacingSwitchInPosition[i].Designator[0].Entry = f'{sw.replace("_","")[:-1]} in {direction}'
+                
+                #print(f'{sw} Create RefersToSwitch')
                 rts.Route[route-1].FacingSwitchInPosition[i].create_RefersToSwitch()
                 rts.Route[route-1].FacingSwitchInPosition[i].RefersToSwitch.Ref = f'il_{sw.replace("_","")[:-1]}'
-                i = i + 1
 
+                #print(f'{sw} Create InPosition {sw} {sw[:-2]}')
+                if(sw[:-2] in switchesIS and "ContinueCourse" in switchesIS[sw[:-2]]):
+                    direction = switchesIS[sw[:-2]]["ContinueCourse"] if sw[-1:] == "N" else switchesIS[sw[:-2]]["BranchCourse"]
+                    rts.Route[route-1].FacingSwitchInPosition[i].InPosition = direction
+                    rts.Route[route-1].FacingSwitchInPosition[i].Designator[0].Entry = f'{sw.replace("_","")[:-1]} in {direction}'
+
+                i = i + 1
+    
     with open("App\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
         i = 0
         f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
@@ -2928,7 +2995,7 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
 
     infrastructure_file = "App//Layouts//Example_"+str(example)+"//Infrastructure.RNA"
     export_analysis(infrastructure_file,nodes,neighbours,borders,bufferStops,derailersIS,levelCrossingsIS,lines,operationalPoints,platforms,signalsIS,switchesIS,tracks,trainDetectionElements)
-    
+
     #for i in nodes:
     #    print(i,nodes[i])
     print(" Detecting Danger --> Safe_points.RNA")
