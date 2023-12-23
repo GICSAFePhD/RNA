@@ -543,7 +543,7 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                                         "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch}
                 
                 if type == "doubleSwitchCrossing":
-                    print("*"*100)
+                    #print("*"*100)
 
                     straightBranch_A = i.StraightBranch[0].NetRelationRef#.split('_')[1]
                     straightBranch_B = i.StraightBranch[1].NetRelationRef#.split('_')[1]
@@ -552,8 +552,8 @@ def detect_switchesIS(infrastructure,visualization,nodes):
 
                     straightBranch_1 = straightBranch_A if node in straightBranch_A else straightBranch_B
                     turningBranch_1 = turningBranch_A if node in turningBranch_A else turningBranch_B
-                    straightBranch_2 = straightBranch_B if node in straightBranch_A else straightBranch_B
-                    turningBranch_2 = turningBranch_B if node in turningBranch_A else turningBranch_B
+                    straightBranch_2 = straightBranch_B if node in straightBranch_A else straightBranch_A
+                    turningBranch_2 = turningBranch_B if node in turningBranch_A else turningBranch_A
 
                     node_1 = node
 
@@ -562,8 +562,8 @@ def detect_switchesIS(infrastructure,visualization,nodes):
 
                     #print (f'{sw_name} - {node} -> [{straightBranch_A}] [{straightBranch_B}] [{turningBranch_A}] [{turningBranch_B}]')
 
-                    print(f'{sw_name} - {node_1} -> {straightBranch_1} + {turningBranch_1}')
-                    print(f'{sw_name} - {node_2} -> {straightBranch_2} + {turningBranch_2}')
+                    #print(f'{sw_name} - {node_1} -> {straightBranch_1} + {turningBranch_1}')
+                    #print(f'{sw_name} - {node_2} -> {straightBranch_2} + {turningBranch_2}')
 
                     continueCourse = "right"
                     branchCourse = "left"
@@ -574,10 +574,65 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                     switchesIS[sw_name+'B'] = {"Node":node_2,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
                                         "Direction":direction,"LeftBranch":straightBranch_2,"RightBranch":turningBranch_2}
                     
-                    print("*"*100)
+                    #print("*"*100)
 
+        if infrastructure.Crossings != None:
+            for i in infrastructure.Crossings[0].Crossing:
+                if i.Id not in switchesIS.keys():
+                    xs_name = i.Name[0].Name
+                    node = i.SpotLocation[0].NetElementRef
+                    type = "Crossing"
+                    direction = i.SpotLocation[0].ApplicationDirection
+    
+                    straightBranch_A = i.External[0].Ref#.split('_')[1]
+                    straightBranch_B = i.External[1].Ref#.split('_')[1]
+                    turningBranch_A = i.External[0].Ref#.split('_')[1]
+                    turningBranch_B = i.External[1].Ref#.split('_')[1]
 
-    #UPDATE POSITION FOR MULTISWITCHES
+                    straightBranch_1 = straightBranch_A if node in straightBranch_A else straightBranch_B
+                    turningBranch_1 = turningBranch_A if node in turningBranch_A else turningBranch_B
+                    straightBranch_2 = straightBranch_B if node in straightBranch_A else straightBranch_A
+                    turningBranch_2 = turningBranch_B if node in turningBranch_A else turningBranch_A
+
+                    node_1 = node
+                    node_2 = ['ne'+x for x in straightBranch_2.split('_')[1].split('ne')[1:] if x in turningBranch_2.split('_')[1].split('ne')[1:]][0]
+
+                    #print(f'{xs_name} - {node_1} -> {straightBranch_1} + {turningBranch_1}')
+                    #print(f'{xs_name} - {node_2} -> {straightBranch_2} + {turningBranch_2}')
+
+                    switchesIS[xs_name+'A'] = {"Node":node_1,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                                        "Direction":direction,"LeftBranch":straightBranch_1,"RightBranch":turningBranch_1}
+
+                    switchesIS[xs_name+'B'] = {"Node":node_2,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                                        "Direction":direction,"LeftBranch":straightBranch_2,"RightBranch":turningBranch_2}  
+
+                    nodes_1 = ['ne'+i for i in straightBranch_1.split('_')[1].split('ne')[1:]]
+                    nodes_2 = ['ne'+i for i in straightBranch_2.split('_')[1].split('ne')[1:]]
+
+                    nodes = nodes_1 + nodes_2
+                    #print(nodes)
+
+                    if visualization.Visualization != None:
+                        node_coord = {}
+                        for i in visualization.Visualization[0].LinearElementProjection:
+                            for node in nodes:
+                                if node == i.RefersToElement:
+                                    for coordinate in i.Coordinate:
+                                        #print(node,coordinate.X,coordinate.Y)
+
+                                        if node not in node_coord:
+                                            node_coord[node] = [coordinate.X+";"+coordinate.Y]
+                                        else:
+                                            node_coord[node].append(coordinate.X+";"+coordinate.Y)
+
+                        coord_set = [set(coordenade) for coordenade in node_coord.values()]
+                        scr_position = list(set.intersection(*coord_set))
+
+                        scr_coord = scr_position[0].split(';')
+                        if xs_name+'A' in switchesIS:
+                            switchesIS[xs_name+'A'] |= {"Position":[int(scr_coord[0][:-4]),int(scr_coord[1][:-4])]}
+                        if xs_name+'B' in switchesIS:
+                            switchesIS[xs_name+'B'] |= {"Position":[int(scr_coord[0][:-4]),int(scr_coord[1][:-4])]}
 
     if visualization.Visualization != None:
         for i in  visualization.Visualization[0].SpotElementProjection:
@@ -594,8 +649,8 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                 if sw_name+'B' in switchesIS:
                     switchesIS[sw_name+'B'] |= {"Position":[pos_x,pos_y]}
 
-    for x in switchesIS:
-        print(f'{x},{switchesIS[x]["LeftBranch"]} {switchesIS[x]["RightBranch"]}')
+    #for x in switchesIS:
+    #    print(f'{x},{switchesIS[x]["Node"]}|{switchesIS[x]["LeftBranch"]} {switchesIS[x]["RightBranch"]}')
 
     return switchesIS
 
@@ -777,7 +832,7 @@ def export_analysis(file,netElementsId,neighbours,borders,bufferStops,derailersI
             for j in switchesIS:
                 if i == switchesIS[j]["Node"]:
                     f.write(f'\tSwitches -> {j}\n')
-                    print(f'Switches -> {j} {identify_relations(switchesIS[j]["LeftBranch"])} {identify_relations(switchesIS[j]["RightBranch"])}\n')
+                    #print(f'Switches -> {j} {identify_relations(switchesIS[j]["LeftBranch"])} {identify_relations(switchesIS[j]["RightBranch"])}')
 
                     left = identify_relations(switchesIS[j]["LeftBranch"])[:-1]
                     right = identify_relations(switchesIS[j]["RightBranch"])[:-1]
@@ -1901,7 +1956,6 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
 
     # Find every switch in the network
     for switch in switchesIS:
-        
         sw_info = switchesIS[switch]
         start_node = nodeSwitch[switch]["Start"]
         continue_node = nodeSwitch[switch]["Continue"]
@@ -3002,7 +3056,7 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
     signal_placement = find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElements,bufferStops,levelCrossingsIS,platforms,config[8],config[9])
     safe_point_file = "App//Layouts//Example_"+str(example)+"//Safe_points.RNA"
     export_placement(safe_point_file,nodes,signal_placement)
-    
+
     #print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
     signals_file = "App//Layouts//Example_"+str(example)+"//Dangers.RNA"
