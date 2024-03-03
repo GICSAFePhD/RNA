@@ -3083,8 +3083,9 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
     export_signal("App//Layouts//Example_"+str(example)+"//Signalling.RNA",signals,object)
     
     print(" Detecting Routes --> Routes.RNA")
+    route_file = "App//Layouts//Example_"+str(example)+"//Routes.RNA"
     routes = detect_routes(signals,netPaths,switch_net,platform_net,crossing_net)
-    new_table = export_routes("Routes.RNA",routes,object,example,switchesIS)
+    new_table = export_routes(route_file,routes,object,example,switchesIS)
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
 
@@ -3097,7 +3098,7 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
 
     validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,platforms)
 
-    return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}']
+    return [f'Tracks : {len(nodes)} \n BufferStops : {len(bufferStops)} \n LineBorders : {len(borders)} \n Crossings : {len(levelCrossingsIS)} \n Platforms : {len(platforms)}',f'Signals created : {len(signals)}'],routes
 
 def find_shortest_paths(old_route, graph, start_node, end_node, way):
     if ( start_node != end_node ):
