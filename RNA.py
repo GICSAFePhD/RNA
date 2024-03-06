@@ -116,8 +116,6 @@ def get_old_interlocking_table(object,example):
                 if 'Lc' in name:
                     crossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
 
-    #print(crossing_net)
-
     if object.Infrastructure.FunctionalInfrastructure.Platforms != None:
         for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
             #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
@@ -146,7 +144,11 @@ def get_old_interlocking_table(object,example):
 
                 switch_net[switch.Name[0].Name] = {'main':main,'normal':normal,'reverse':reverse}
    
-    #print(switch_net)
+    # TODO: Incorporate double switch and crossings
+
+    for i in switch_net:
+        print(f'sw {i} {switch_net[i]}')
+              
     i = 0
     for route in object.Interlocking.AssetsForIL[0].Routes.Route:
         #print(object.Interlocking.AssetsForIL[0].Routes.Route[i])
@@ -539,7 +541,7 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                 
                     #print(f'{sw_name}[{node}] : {continueCourse}|{branchCourse} : {direction} : {leftBranch}|{rightBranch}')
                 
-                    switchesIS[sw_name] = {"Node":node,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                    switchesIS[sw_name] = {"Node":node,'Type':'simple',"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
                                         "Direction":direction,"LeftBranch":leftBranch,"RightBranch":rightBranch}
                 
                 if type == "doubleSwitchCrossing":
@@ -568,10 +570,10 @@ def detect_switchesIS(infrastructure,visualization,nodes):
                     continueCourse = "right"
                     branchCourse = "left"
 
-                    switchesIS[sw_name+'A'] = {"Node":node_1,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                    switchesIS[sw_name+'A'] = {"Node":node_1,'Type':'double',"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
                                         "Direction":direction,"LeftBranch":straightBranch_1,"RightBranch":turningBranch_1}
 
-                    switchesIS[sw_name+'B'] = {"Node":node_2,"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
+                    switchesIS[sw_name+'B'] = {"Node":node_2,'Type':'double',"ContinueCourse":continueCourse,"BranchCourse":branchCourse,
                                         "Direction":direction,"LeftBranch":straightBranch_2,"RightBranch":turningBranch_2}
                     
                     #print("*"*100)
@@ -652,6 +654,7 @@ def detect_switchesIS(infrastructure,visualization,nodes):
     #for x in switchesIS:
     #    print(f'{x},{switchesIS[x]["Node"]}|{switchesIS[x]["LeftBranch"]} {switchesIS[x]["RightBranch"]}')
 
+    #print(switchesIS)
     return switchesIS
 
 def detect_tracks(infrastructure):
@@ -742,6 +745,7 @@ def analyzing_infrastructure(infrastructure,visualization,nodes):
     # signalsIS
     try:
         signalsIS = detect_signalsIS(infrastructure)
+        print(switchesIS)
     except:
         print("Error with signalsIS")
         signalsIS = {}
@@ -1191,26 +1195,26 @@ def export_routes(file,routes,object,example,switchesIS):
             switch =  '-'.join(i for i in routes[route]["Switches"]) if routes[route]["Switches"] else ''
 
             platform =  routes[route]["Platforms"][0] if routes[route]["Platforms"] else ''
-            crossing = routes[route]["Crossings"][0] if routes[route]["Crossings"] else ''
+            crossing = routes[route]["LevelCrossings"][0] if routes[route]["LevelCrossings"] else ''
             f.write(f'route_{route} [{signal_start} {way} {signal_end}]:\n')
             
-            new_table[int(route)] = {'route':int(route),'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'crossing':crossing}
+            new_table[int(route)] = {'route':int(route),'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way,'switch':switch,'platform':platform,'levelcrossing':crossing}
 
             f.write(f'\tPath: {routes[route]["Path"]}\n')
             if routes[route]["Switches"]:
                 f.write(f'\tSwitches: {routes[route]["Switches"]}\n')
             if routes[route]["Platforms"]:
                 f.write(f'\tPlatforms: {routes[route]["Platforms"]}\n')
-            if routes[route]["Crossings"]:
-                f.write(f'\tCrossings: {routes[route]["Crossings"]}\n')
+            if routes[route]["LevelCrossings"]:
+                f.write(f'\tLevelCrossings: {routes[route]["LevelCrossings"]}\n')
         f.close()
 
     #for route in routes:
     #    if routes[route]["Switches"] != []:
     #        print(route,routes[route])
 
-    for x in switchesIS:
-        print(x,switchesIS[x])
+    #for x in switchesIS:
+    #    print(x,switchesIS[x])
 
     # Create routes for AssetsForIL
     if (object.Interlocking.AssetsForIL != None):
@@ -1295,10 +1299,10 @@ def export_routes(file,routes,object,example,switchesIS):
     
     with open("App\Layouts\Example_"+str(example)+"\\New_table.csv", "w") as f: 
         i = 0
-        f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
+        f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , LevelCrossings')
         for route in new_table:
             i = i + 1
-            f.write(f'\nR_{i:02} , {new_table[route]["signal_start"]} , {new_table[route]["signal_end"]} , {new_table[route]["way"]} , {new_table[route]["net_start"]}-{new_table[route]["net_end"]} , {new_table[route]["switch"]} , {new_table[route]["platform"]} , {new_table[route]["crossing"]}')
+            f.write(f'\nR_{i:02} , {new_table[route]["signal_start"]} , {new_table[route]["signal_end"]} , {new_table[route]["way"]} , {new_table[route]["net_start"]}-{new_table[route]["net_end"]} , {new_table[route]["switch"]} , {new_table[route]["platform"]} , {new_table[route]["levelcrossing"]}')
         
         f.close()
 
@@ -1485,9 +1489,9 @@ def detect_routes(signals,netPaths,switch_net,platform_net,crossing_net):
                     crossing = ''
                     switches = find_switches_in_the_path(paths,switch_net)
                     platform = find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal)
-                    crossing = find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal)
+                    crossing = find_level_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal)
                     #print(f'Route_{route} : {start_signal} to {end_signal} {paths}')
-                    routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platform,'Crossings':crossing}
+                    routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platform,'LevelCrossings':crossing}
                     continue
     
         # Find all the next nodes
@@ -1508,22 +1512,22 @@ def detect_routes(signals,netPaths,switch_net,platform_net,crossing_net):
             crossing = ''
             switches = find_switches_in_the_path(paths[node],switch_net)
             platform = find_platforms_in_the_path(paths[node],platform_net,signals,start_signal,end_signal)
-            crossing = find_crossings_in_the_path(paths[node],crossing_net,signals,start_signal,end_signal)
+            crossing = find_level_crossings_in_the_path(paths[node],crossing_net,signals,start_signal,end_signal)
                     
             route += 1
             #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
-            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform,'Crossings':crossing}
+            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platform,'LevelCrossings':crossing}
 
         if len(netPaths) == 53:
             if sig == 'sig32':
                 route += 1
                 path = ['ne70','ne104','ne21']
                 switch = ['Sw03_N']
-                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':path,'Switches':switch,'Platforms':[],'Crossings':[]}
+                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':path,'Switches':switch,'Platforms':[],'LevelCrossings':[]}
             if sig == 'sig41':
                 route += 1
                 path = ['ne103','ne64']
-                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'Crossings':[]}
+                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[]}
 
     return routes
 
@@ -1564,9 +1568,12 @@ def find_shortest_path(graph, start, end, path=[]):
 def find_switches_in_the_path(path,switch_net):
     switches = []
     #print(path)
-    #print(switch_net)
+    #for i in switch_net:
+    #    print(i,switch_net[i])
     
     for i in switch_net:
+        #if i[-1] == 'A' or i[-1] == 'B':
+        #    print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
         if switch_net[i]['main'] in path and switch_net[i]['normal'] in path:
             switches.append(i+"_N")
         if switch_net[i]['main'] in path and switch_net[i]['reverse'] in path:
@@ -1593,7 +1600,7 @@ def find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signa
     #print(platform)
     return platform
 
-def find_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal):
+def find_level_crossings_in_the_path(paths,crossing_net,signals,start_signal,end_signal):
     crossing = []
     
     #print(platform_net)
@@ -3076,8 +3083,8 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
 
     #find_way(signals,nodes,config)
     
-    #for i in switchesIS:
-    #    print(i,switchesIS[i])
+    #for i in switch_net:
+    #    print(i,switch_net[i])
     #move_signals(signals,nodes,True)
     
     export_signal("App//Layouts//Example_"+str(example)+"//Signalling.RNA",signals,object)
@@ -3086,6 +3093,9 @@ def analyzing_object(object,sequence,switch_net,platform_net,crossing_net,old_ta
     route_file = "App//Layouts//Example_"+str(example)+"//Routes.RNA"
     routes = detect_routes(signals,netPaths,switch_net,platform_net,crossing_net)
     new_table = export_routes(route_file,routes,object,example,switchesIS)
+    
+    for route in routes:
+        print('R'+str(route),routes[route])
     
     print(f'RML object\'s size: {sizeof(object)} Bytes')
 
