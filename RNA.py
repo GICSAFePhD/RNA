@@ -142,8 +142,22 @@ def get_old_interlocking_table(object,example):
                 normal = right if '-' in left_radius else left
                 reverse = left if '-' in left_radius else right
 
-                switch_net[switch.Name[0].Name] = {'main':main,'normal':normal,'reverse':reverse}
+                switch_net[switch.Name[0].Name] = {'type':'simple','main':main,'normal':normal,'reverse':reverse}
    
+            if type == "doubleSwitchCrossing":
+                main = switch.SpotLocation[0].NetElementRef
+                straight_1,straight_2 = switch.StraightBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
+                straight_3,straight_4 = switch.StraightBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
+                turning_1,turning_2 = switch.TurningBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
+                turning_3,turning_4 = switch.TurningBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
+
+                #print(f'{straight_1} to {straight_2} | {straight_3} to {straight_4} || {turning_1} to {turning_2} | {turning_3} to {turning_4}')
+
+                # RR NN RN NR
+                # RR NN RN NR
+
+                switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_1,'ne'+turning_2],'Movement_NR':['ne'+turning_3,'ne'+turning_4]}
+
     # TODO: Incorporate double switch and crossings
 
     for i in switch_net:
@@ -1572,12 +1586,21 @@ def find_switches_in_the_path(path,switch_net):
     #    print(i,switch_net[i])
     
     for i in switch_net:
-        #if i[-1] == 'A' or i[-1] == 'B':
-        #    print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-        if switch_net[i]['main'] in path and switch_net[i]['normal'] in path:
-            switches.append(i+"_N")
-        if switch_net[i]['main'] in path and switch_net[i]['reverse'] in path:
-            switches.append(i+"_R")
+        if switch_net[i]['type'] == 'simple':
+            if switch_net[i]['main'] in path and switch_net[i]['normal'] in path:
+                switches.append(i+"_N")
+            if switch_net[i]['main'] in path and switch_net[i]['reverse'] in path:
+                switches.append(i+"_R")
+
+        if switch_net[i]['type'] == 'double':
+            if switch_net[i]['Movement_NN'][0] in path and switch_net[i]['Movement_NN'][1] in path:
+                switches.append(i+"_NN")
+            if switch_net[i]['Movement_RR'][0] in path and switch_net[i]['Movement_RR'][1] in path:
+                switches.append(i+"_RR")
+            if switch_net[i]['Movement_RN'][0] in path and switch_net[i]['Movement_RN'][1] in path:
+                switches.append(i+"_RN")
+            if switch_net[i]['Movement_NR'][0] in path and switch_net[i]['Movement_NR'][1] in path:
+                switches.append(i+"_NR")
 
     #print(switches)
     return switches
@@ -2365,35 +2388,35 @@ def reduce_signals(signals,signal_placement):
 
                 if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] != "S" and abs(a_position-b_position) < 100):
                     if signal_a not in delete and signal_b not in delete:
-                        print(f'removing {signal_a} for {signal_b}')
+                        #print(f'removing {signal_a} for {signal_b}')
                         delete.append(signal_a)
 
                 if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "L" and abs(a_position-b_position) < 500):
                     if signal_a not in delete and signal_b not in delete:
-                        print(f'removing {signal_a} for {signal_b}')
+                        #print(f'removing {signal_a} for {signal_b}')
                         delete.append(signal_a)
 
                 if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "T" and abs(a_position-b_position) < 500):
                     if signal_b not in delete and signals[signal_b]["Name"][0] != "H" and signal_a not in delete:
-                        print(f'removing {signal_b} for {signal_a}')
+                        #print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
                 if(signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "X" and abs(a_position-b_position) < 250):
                     if signal_a not in delete and signal_b not in delete and signals[signal_b]["Name"][0] == "P":
-                        print(f'----removing {signal_b} for {signal_a}')
+                        #print(f'----removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
     
                 if (signals[signal_a]["Direction"] == signals[signal_b]["Direction"] and signals[signal_a]["Name"][0] == "J" and abs(a_position-b_position) < 500):
                     if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H" and signals[signal_b]["Name"][0] != "T" and signal_a not in delete:
-                        print(f'removing {signal_b} for {signal_a}')
+                        #print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
                 if (signal_a not in delete and a_position == b_position and signals[signal_a]["Direction"] == signals[signal_b]["Direction"]):
                     #print(f'{signal_a} {a_position} | {signal_b} {b_position}')
                     
                     if signal_b not in delete and (signals[signal_b]["Name"][0] != "S" and signals[signal_b]["Name"][0] != "H") and signal_a not in delete:
-                        print(f'removing {signal_b} for {signal_a}')
+                        #print(f'removing {signal_b} for {signal_a}')
                         delete.append(signal_b)
 
                 #print(f'{signal_a} {signal_b} {no_safe_points_between(danger_positions,a_position,b_position)} {abs(a_position-b_position)}')
@@ -2403,94 +2426,94 @@ def reduce_signals(signals,signal_placement):
                             if signals[signal_a]["AtTrack"] == signals[signal_b]["AtTrack"]:
                                 if int(signal_a[3:]) < int(signal_b[3:]):
                                     if signal_b not in delete and signals[signal_b]["Name"][0] != "S" and signal_a not in delete:
-                                        print(f'removing {signal_b} for {signal_a}')
+                                        #print(f'removing {signal_b} for {signal_a}')
                                         delete.append(signal_b)
                     
                     if signals[signal_a]["Direction"] == signals[signal_b]["Direction"]:
                         if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "T":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "J":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "S":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "C":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "C" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "C":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "S" and signals[signal_b]["Name"][0] == "J":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
                         if signals[signal_a]["Name"][0] == "J" and signals[signal_b]["Name"][0] == "S":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "L" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)  
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "L":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)  
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "T":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)  
                         if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "B":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)  
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "B":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)   
                         if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "B":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "X":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)          
                         if signals[signal_a]["Name"][0] == "T" and signals[signal_b]["Name"][0] == "H":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)   
                         if signals[signal_a]["Name"][0] == "P" and signals[signal_b]["Name"][0] == "X":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "X" and signals[signal_b]["Name"][0] == "P":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)   
 
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "B":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_a} for {signal_b}')
+                                #print(f'removing {signal_a} for {signal_b}')
                                 delete.append(signal_a)
                         if signals[signal_a]["Name"][0] == "B" and signals[signal_b]["Name"][0] == "B":
                             if signal_a not in delete and signal_b not in delete:
-                                print(f'removing {signal_b} for {signal_a}')
+                                #print(f'removing {signal_b} for {signal_a}')
                                 delete.append(signal_b)
 
     for delete_signal in delete:
@@ -2627,7 +2650,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
         if node in railJoints:
             for railJoint in railJoints[node]:
                 railJoint_position = railJoint["Position"]
-                print(f"  {node} has a RailJoint[{railJoint['Joint']}] @ {railJoint_position}")
+                #print(f"  {node} has a RailJoint[{railJoint['Joint']}] @ {railJoint_position}")
                 if node not in signal_placement:
                     signal_placement[node] = {"Next":[],"Prev":[]}
 
@@ -2653,7 +2676,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                 platform_position = platform["Position"]
 
             #platform_position = platforms_node[node]["Position"]
-            print(f'  {node} has a Platform[{platform["Platform"]}] @ {platform_position}')
+            #print(f'  {node} has a Platform[{platform["Platform"]}] @ {platform_position}')
             if node not in signal_placement:
                 signal_placement[node] = {"Next":[],"Prev":[]}
 
@@ -2684,7 +2707,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     crossing_positions[0] = crossing_positions[0] + 45
                 else:
                     crossing_positions[0] = crossing_positions[0] - 45
-                print(f'  {node} has a LevelCrossing[{crossing["Id"]}] @ {crossing_positions}')
+                #print(f'  {node} has a LevelCrossing[{crossing["Id"]}] @ {crossing_positions}')
                 if node not in signal_placement:
                     signal_placement[node] = {"Next":[],"Prev":[]}
 
@@ -2707,7 +2730,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
         if nodes[node]["Lines"] > 1:
             all_points = nodes[node]["All"]
             curve_positions  = all_points[1:-1]
-            print(f'  {node} has a Curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
+            #print(f'  {node} has a Curve({nodes[node]["Lines"]} lines) @ {curve_positions}')
 
             # Find orientation of the curve
             orientation = []
@@ -2780,7 +2803,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                         x_middle_point = begin+(x+1)*slice
                         y_coordinate = nodes[node]["Begin"][1]
         
-                        print(f'  {node} has a Middle point @ {[round(x_middle_point,1),y_coordinate]}')
+                        #print(f'  {node} has a Middle point @ {[round(x_middle_point,1),y_coordinate]}')
                 
                         # next_position
                         next_place = signal_placement[node]["Next"]
@@ -2802,7 +2825,7 @@ def find_signal_positions(nodes,netPaths,switchesIS,tracks,trainDetectionElement
                     x_middle_point = (nodes[node]["Begin"][0] + nodes[node]["End"][0]) / 2
                     y_coordinate = nodes[node]["Begin"][1]
                     
-                    print(f'  {node} has a Middle point @ {[round(x_middle_point,1),y_coordinate]}')
+                    #print(f'  {node} has a Middle point @ {[round(x_middle_point,1),y_coordinate]}')
                     
                     # next_position
                     next_place = signal_placement[node]["Next"]
@@ -2906,7 +2929,7 @@ def order_nodes_points(nodes):
         #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["All"][0] < nodes[node]["All"][-1],nodes[node]["Way"],nodes[node]["Inverter"])
 
         #print(f'--- {node} {nodes[node]["All"]}')
-        print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
+        #print(node,nodes[node]["All"][0],nodes[node]["All"][-1],nodes[node]["Way"])
         nodes[node]["All"] = sorted(nodes[node]["All"], key=lambda x: x[0])
         if nodes[node]["All"][0] != nodes[node]["Begin"]:
             nodes[node]["Begin"] = nodes[node]["All"][0]
@@ -3217,9 +3240,10 @@ def validate_signalling(nodes,signals,switch_net,bufferStops,levelCrossingsIS,pl
     switch_branch_unprotected = []
 
     for switch in switch_net:
-        switch_start_unprotected.append(switch_net[switch]['main'])
-        switch_normal_unprotected.append(switch_net[switch]['normal'])
-        switch_branch_unprotected.append(switch_net[switch]['reverse'])
+        if switch_net[switch]['type'] == 'simple':
+            switch_start_unprotected.append(switch_net[switch]['main'])
+            switch_normal_unprotected.append(switch_net[switch]['normal'])
+            switch_branch_unprotected.append(switch_net[switch]['reverse'])
 
     switch_start_unprotected = list(set(switch_start_unprotected))
     switch_normal_unprotected = list(set(switch_normal_unprotected))
