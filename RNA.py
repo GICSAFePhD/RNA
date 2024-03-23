@@ -93,148 +93,167 @@ def get_old_interlocking_table(object,example):
     platform_net = {}
     scissorCrossing_net = {}
     
-    for signal in object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS:
-        #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
-        signals_net[signal.Name[0].Name] = {'net':signal.SpotLocation[0].NetElementRef}
+    try:
+        if object.Infrastructure.FunctionalInfrastructure.SignalsIS != None:
+            for signal in object.Infrastructure.FunctionalInfrastructure.SignalsIS.SignalIS:
+                #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+                signals_net[signal.Name[0].Name] = {'net':signal.SpotLocation[0].NetElementRef}
 
-    for signal in object.Infrastructure.InfrastructureVisualizations.Visualization:
-        for x in signal.SpotElementProjection:
-            ref = x.RefersToElement
-            name = x.Name[0].Name
-            if 'sig' in ref:
-                signals_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+            for signal in object.Infrastructure.InfrastructureVisualizations.Visualization:
+                for x in signal.SpotElementProjection:
+                    ref = x.RefersToElement
+                    name = x.Name[0].Name
+                    if 'sig' in ref:
+                        signals_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+    except:
+        signals_net = {}
 
     #print(signals_net)
 
-    if object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS != None:
-        for levelCrossing in object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS[0].LevelCrossingIS:
-            #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
-            levelCrossing_net[levelCrossing.Name[0].Name] = {'net':levelCrossing.SpotLocation[0].NetElementRef}
+    try:
+        if object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS != None:
+            for levelCrossing in object.Infrastructure.FunctionalInfrastructure.LevelCrossingsIS[0].LevelCrossingIS:
+                #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+                levelCrossing_net[levelCrossing.Name[0].Name] = {'net':levelCrossing.SpotLocation[0].NetElementRef}
 
-        for levelCrossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
-            for x in levelCrossing.SpotElementProjection:
-                name = x.Name[0].Name
-                if 'Lc' in name:
-                    levelCrossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+            for levelCrossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
+                for x in levelCrossing.SpotElementProjection:
+                    name = x.Name[0].Name
+                    if 'Lc' in name:
+                        levelCrossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0]),'y': int(x.Coordinate[0].Y.split('.')[0])}
+    except:
+        levelCrossing_net = {}
+    #print(levelCrossing_net)
 
-    if object.Infrastructure.FunctionalInfrastructure.Platforms != None:
-        for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
-            #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
-            platform_net[platform.Name[0].Name] = {'net':platform.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
+    try:           
+        if object.Infrastructure.FunctionalInfrastructure.Platforms != None:
+            for platform in object.Infrastructure.FunctionalInfrastructure.Platforms[0].Platform:
+                #print(signal.Name[0].Name,signal.SpotLocation[0].NetElementRef)
+                platform_net[platform.Name[0].Name] = {'net':platform.LinearLocation[0].AssociatedNetElement[0].NetElementRef}
 
-        for platform in object.Infrastructure.InfrastructureVisualizations.Visualization:
-            for x in platform.SpotElementProjection:
-                name = x.Name[0].Name
-                if 'Plat' in name:
-                    platform_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
-
+            for platform in object.Infrastructure.InfrastructureVisualizations.Visualization:
+                for x in platform.SpotElementProjection:
+                    name = x.Name[0].Name
+                    if 'Plat' in name:
+                        platform_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+    except:
+        platform_net = {}
     #print(platform_net)
 
-    if object.Infrastructure.FunctionalInfrastructure.SwitchesIS != None:
-        for switch in object.Infrastructure.FunctionalInfrastructure.SwitchesIS[0].SwitchIS:
-            type = switch.Type
-            
-            if type == "ordinarySwitch":
-                main = switch.SpotLocation[0].NetElementRef
-                left = switch.LeftBranch[0].NetRelationRef.split('_')[1].replace(main,'')
-                left_radius = switch.LeftBranch[0].Radius
-                right = switch.RightBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+    try:
+        if object.Infrastructure.FunctionalInfrastructure.SwitchesIS != None:
+            for switch in object.Infrastructure.FunctionalInfrastructure.SwitchesIS[0].SwitchIS:
+                type = switch.Type
+                
+                if type == "ordinarySwitch":
+                    main = switch.SpotLocation[0].NetElementRef
+                    left = switch.LeftBranch[0].NetRelationRef.split('_')[1].replace(main,'')
+                    left_radius = switch.LeftBranch[0].Radius
+                    right = switch.RightBranch[0].NetRelationRef.split('_')[1].replace(main,'')
 
-                normal = right if '-' in left_radius else left
-                reverse = left if '-' in left_radius else right
+                    normal = right if '-' in left_radius else left
+                    reverse = left if '-' in left_radius else right
 
-                switch_net[switch.Name[0].Name] = {'type':'simple','main':main,'normal':normal,'reverse':reverse}
-   
-            if type == "doubleSwitchCrossing":
-                main = switch.SpotLocation[0].NetElementRef
-                straight_1,straight_2 = switch.StraightBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
-                straight_3,straight_4 = switch.StraightBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
-                turning_1,turning_2 = switch.TurningBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
-                turning_3,turning_4 = switch.TurningBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
+                    switch_net[switch.Name[0].Name] = {'type':'simple','main':main,'normal':normal,'reverse':reverse}
+    
+                if type == "doubleSwitchCrossing":
+                    main = switch.SpotLocation[0].NetElementRef
+                    straight_1,straight_2 = switch.StraightBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
+                    straight_3,straight_4 = switch.StraightBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
+                    turning_1,turning_2 = switch.TurningBranch[0].NetRelationRef.split('_')[1].split('ne')[1:]
+                    turning_3,turning_4 = switch.TurningBranch[1].NetRelationRef.split('_')[1].split('ne')[1:]
 
-                #print(f'{straight_1} to {straight_2} | {straight_3} to {straight_4} || {turning_1} to {turning_2} | {turning_3} to {turning_4}')
+                    #print(f'{straight_1} to {straight_2} | {straight_3} to {straight_4} || {turning_1} to {turning_2} | {turning_3} to {turning_4}')
 
-                # RR NN RN NR
-                # RR NN RN NR
+                    # RR NN RN NR
+                    # RR NN RN NR
 
-                switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_1,'ne'+turning_2],'Movement_NR':['ne'+turning_3,'ne'+turning_4]}
-
+                    switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_1,'ne'+turning_2],'Movement_NR':['ne'+turning_3,'ne'+turning_4]}
+    except:
+        switch_net = {}
     #for i in switch_net:
     #    print(f'sw {i} {switch_net[i]}')
 
-    if object.Infrastructure.FunctionalInfrastructure.Crossings != None:
-        for scissorCrossing in object.Infrastructure.FunctionalInfrastructure.Crossings[0].Crossing:
-            scissorCrossing_net[scissorCrossing.Name[0].Name] = {'net':[]}
-            for i in scissorCrossing.External:
-                aux = i.Ref.split('_')[1].split('ne')
-                element_A = f'ne{aux[1]}'
-                element_B = f'ne{aux[2]}'
-                scissorCrossing_net[scissorCrossing.Name[0].Name]['net'].append(element_A)
-                scissorCrossing_net[scissorCrossing.Name[0].Name]['net'].append(element_B)
+    try:
+        if object.Infrastructure.FunctionalInfrastructure.Crossings != None:
+            for scissorCrossing in object.Infrastructure.FunctionalInfrastructure.Crossings[0].Crossing:
+                scissorCrossing_net[scissorCrossing.Name[0].Name] = {'net':[]}
+                for i in scissorCrossing.External:
+                    aux = i.Ref.split('_')[1].split('ne')
+                    element_A = f'ne{aux[1]}'
+                    element_B = f'ne{aux[2]}'
+                    scissorCrossing_net[scissorCrossing.Name[0].Name]['net'].append(element_A)
+                    scissorCrossing_net[scissorCrossing.Name[0].Name]['net'].append(element_B)
 
-        #for scissorCrossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
-        #    for x in scissorCrossing.SpotElementProjection:
-        #        name = x.Name[0].Name
-        #        if 'Lc' in name:
-        #            levelCrossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+            #for scissorCrossing in object.Infrastructure.InfrastructureVisualizations.Visualization:
+            #    for x in scissorCrossing.SpotElementProjection:
+            #        name = x.Name[0].Name
+            #        if 'Lc' in name:
+            #            levelCrossing_net[name] |= {'x': int(x.Coordinate[0].X.split('.')[0])}
+    except:
+        scissorCrossing_net = {}
 
+    try:
+        i = 0
+        for route in object.Interlocking.AssetsForIL[0].Routes.Route:
+            #print(object.Interlocking.AssetsForIL[0].Routes.Route[i])
+            i = i + 1
+            signals = route.Designator[0].Entry[6:]
+            #print(signals,signals.split(' ')[0].split('-'))
+            [signal_start,signal_end] = signals.split(' ')[0].split('-')[:2]
+            [net_start,net_end]         = [signals_net[signal_start]['net'],signals_net[signal_end]['net']]
 
-    i = 0
-    for route in object.Interlocking.AssetsForIL[0].Routes.Route:
-        #print(object.Interlocking.AssetsForIL[0].Routes.Route[i])
-        i = i + 1
-        signals = route.Designator[0].Entry[6:]
-        #print(signals,signals.split(' ')[0].split('-'))
-        [signal_start,signal_end] = signals.split(' ')[0].split('-')[:2]
-        [net_start,net_end]         = [signals_net[signal_start]['net'],signals_net[signal_end]['net']]
+            #print(signals,signal_start,signal_end)
+            way = ">>" if signals_net[signal_start]['x'] < signals_net[signal_end]['x'] else "<<"
 
-        #print(signals,signal_start,signal_end)
-        way = ">>" if signals_net[signal_start]['x'] < signals_net[signal_end]['x'] else "<<"
+            if (example == 3 and i == 33):
+                way = "<<"
+                
+            old_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way}
 
-        if (example == 3 and i == 33):
-            way = "<<"
-            
-        old_table[i] = {'signal_start':signal_start,'signal_end':signal_end,'net_start':net_start,'net_end':net_end,'way':way}
+            if net_start != net_end:
+                if ' ' in signals:
+                    switch = signals.split(' ')[1]
+                    #print(switch[1:-1])
+                    old_table[i] |= {'switch':switch[1:-1]}
 
-        if net_start != net_end:
-            if ' ' in signals:
-                switch = signals.split(' ')[1]
-                #print(switch[1:-1])
-                old_table[i] |= {'switch':switch[1:-1]}
+            for platform in platform_net:
+                if platform_net[platform]['net'] == net_start or platform_net[platform]['net'] == net_end:
+                    if way == ">>":
+                        if signals_net[signal_start]['x'] < platform_net[platform]['x'] and signals_net[signal_end]['x'] > platform_net[platform]['x']:
+                            old_table[i] |= {'platform':platform}
+                    else:
+                        if signals_net[signal_start]['x'] > platform_net[platform]['x'] and signals_net[signal_end]['x'] < platform_net[platform]['x']:
+                            old_table[i] |= {'platform':platform}
 
-        for platform in platform_net:
-            if platform_net[platform]['net'] == net_start or platform_net[platform]['net'] == net_end:
-                if way == ">>":
-                    if signals_net[signal_start]['x'] < platform_net[platform]['x'] and signals_net[signal_end]['x'] > platform_net[platform]['x']:
-                        old_table[i] |= {'platform':platform}
-                else:
-                    if signals_net[signal_start]['x'] > platform_net[platform]['x'] and signals_net[signal_end]['x'] < platform_net[platform]['x']:
-                        old_table[i] |= {'platform':platform}
-
-        for crossing in levelCrossing_net:
-            if levelCrossing_net[crossing]['net'] == net_start or levelCrossing_net[crossing]['net'] == net_end:
-                if way == ">>":
-                    if signals_net[signal_start]['x'] < levelCrossing_net[crossing]['x'] and signals_net[signal_end]['x'] > levelCrossing_net[crossing]['x']:
-                        old_table[i] |= {'crossing':crossing}
-                else:
-                    if signals_net[signal_start]['x'] > levelCrossing_net[crossing]['x'] and signals_net[signal_end]['x'] < levelCrossing_net[crossing]['x']:
-                        old_table[i] |= {'crossing':crossing}
+            for crossing in levelCrossing_net:
+                if levelCrossing_net[crossing]['net'] == net_start or levelCrossing_net[crossing]['net'] == net_end:
+                    if way == ">>":
+                        if signals_net[signal_start]['x'] < levelCrossing_net[crossing]['x'] and signals_net[signal_end]['x'] > levelCrossing_net[crossing]['x']:
+                            old_table[i] |= {'crossing':crossing}
+                    else:
+                        if signals_net[signal_start]['x'] > levelCrossing_net[crossing]['x'] and signals_net[signal_end]['x'] < levelCrossing_net[crossing]['x']:
+                            old_table[i] |= {'crossing':crossing}
+    except:
+        old_table = {}
 
         #print(f'Route_{i:02}: {signal_start}[{net_start}] {signal_end}[{net_end}]')
         
-    with open("App\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
-        i = 0
-        f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
-        for route in object.Interlocking.AssetsForIL[0].Routes.Route:
-            i = i + 1
-            switch = old_table[i]["switch"] if "switch" in old_table[i] else "-"
-            platform = old_table[i]["platform"] if "platform" in old_table[i] else "-"
-            crossing = old_table[i]["crossing"] if "crossing" in old_table[i] else "-"
+    try:
+        with open("App\Layouts\Example_"+str(example)+"\\Old_table.csv", "w") as f: 
+            i = 0
+            f.write(f'Route , Signal_start , Signal_end , Direction , netElements , switch , platform , crossing')
+            for route in object.Interlocking.AssetsForIL[0].Routes.Route:
+                i = i + 1
+                switch = old_table[i]["switch"] if "switch" in old_table[i] else "-"
+                platform = old_table[i]["platform"] if "platform" in old_table[i] else "-"
+                crossing = old_table[i]["crossing"] if "crossing" in old_table[i] else "-"
 
-            f.write(f'\nR_{i:02} , {old_table[i]["signal_start"]} , {old_table[i]["signal_end"]} , {old_table[i]["way"]} , {old_table[i]["net_start"]}-{old_table[i]["net_end"]} , {switch} , {platform} , {crossing}')
-        
-        f.close()
-
+                f.write(f'\nR_{i:02} , {old_table[i]["signal_start"]} , {old_table[i]["signal_end"]} , {old_table[i]["way"]} , {old_table[i]["net_start"]}-{old_table[i]["net_end"]} , {switch} , {platform} , {crossing}')
+            
+            f.close()
+    except:
+        None
     return old_table,switch_net,platform_net,levelCrossing_net,scissorCrossing_net
 
 def delete_signal_visual(object):
@@ -1669,9 +1688,9 @@ def find_scissor_crossings_in_the_path(path,scissorCrossing_net,signals,start_si
     
     for i in scissorCrossing_net:
         if scissorCrossing_net[i]['net'][0] in path and scissorCrossing_net[i]['net'][1] in path:
-            crossings.append(i+"_N")
+            crossings.append(i+"_XN")
         if scissorCrossing_net[i]['net'][2] in path and scissorCrossing_net[i]['net'][3] in path:
-            crossings.append(i+"_R")
+            crossings.append(i+"_XR")
 
     #print(crossings)
     return crossings
@@ -3140,8 +3159,9 @@ def analyzing_object(object,sequence,switch_net,platform_net,levelCrossing_net,s
     
     #find_way(signals,nodes,config)
     
-    #for i in switch_net:
-    #    print(i,switch_net[i])
+    #for i in levelCrossing_net:
+    #    print(i,levelCrossing_net[i])
+
     #move_signals(signals,nodes,True)
     
     export_signal("App//Layouts//Example_"+str(example)+"//Signalling.RNA",signals,object)
