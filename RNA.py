@@ -1504,6 +1504,8 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
     #print(netPaths)
     signals_in_node = find_semaphores_in_node(signals)
     #print(signals_in_node)
+    for path in signals_in_node:
+        print(f'{path} {signals_in_node[path]}')
     #for path in netPaths:
     #    print(f'{path} {netPaths[path]}')
 
@@ -1522,14 +1524,16 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
 
         direction = "Next" if way == ">>" else "Prev"
         if start_node in signals_in_node:
-            #print(f'{start_signal} {way} {signals_in_node[start_node][direction]}')
+            print(f'{start_signal} {way} {signals_in_node[start_node][direction]}')
             if len(signals_in_node[start_node][direction]) > 1:
-                if start_signal == signals_in_node[start_node][direction][0]:
-                    end_signal = signals_in_node[start_node][direction][1]
-                    #print(f'{way} {signals[start_signal]["Position"][0]} {signals[end_signal]["Position"][0]}')
+                #if start_signal == signals_in_node[start_node][direction][0]:
+                #    end_signal = signals_in_node[start_node][direction][1]
+                if start_signal in signals_in_node[start_node][direction] and  start_signal != signals_in_node[start_node][direction][-1]:
+                    end_signal = signals_in_node[start_node][direction][signals_in_node[start_node][direction].index(start_signal)+1]
+                    print(f'{way} {start_signal} {end_signal} {signals[start_signal]["Position"][0]} {signals[end_signal]["Position"][0]}')
                 if start_signal == signals_in_node[start_node][direction][-1]:
                     end_signal = signals_in_node[start_node][direction][0]
-                    #print(f'{way} {signals[start_signal]["Position"][0]} {signals[end_signal]["Position"][0]}')
+                    print(f'{way} {start_signal} {end_signal} {signals[start_signal]["Position"][0]} {signals[end_signal]["Position"][0]}')
 
                 if ((way == ">>" and signals[start_signal]["Position"][0] < signals[end_signal]["Position"][0]) or (way == "<<" and signals[start_signal]["Position"][0] > signals[end_signal]["Position"][0])):
                     route += 1
@@ -1570,16 +1574,17 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
             #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
             routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platforms,'LevelCrossings':levelCrossing,'ScissorCrossings':scissorCrossing}
         
+        #print(len(netPaths))
         if len(netPaths) == 53:
-            if sig == 'sig32':
+            if sig == 'L32':
                 route += 1
                 path = ['ne70','ne104','ne21']
-                scissorCrossing = ['Sw03_N']
-                routes[route] = {'Start':'sig32','End':'sig73','Way':'>>','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':scissorCrossing}
-            if sig == 'sig41':
+                scissorCrossing = ['Sw03_XN']
+                routes[route] = {'Start':'L32','End':'P73','Way':'>>','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':scissorCrossing}
+            if sig == 'L41':
                 route += 1
                 path = ['ne103','ne64']
-                routes[route] = {'Start':'sig41','End':'sig90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':[]}
+                routes[route] = {'Start':'L41','End':'S90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':[]}
         
     return routes
 
@@ -1737,6 +1742,8 @@ def find_semaphores_in_node(signals):
     signals_in_node = {}
     
     for sig in signals:
+        print(f'{sig} {signals[sig]}')
+
         # Adding the node
         if signals[sig]["From"] not in signals_in_node:
             signals_in_node[signals[sig]["From"]] = {"Next":[],"Prev":[]}
@@ -1754,6 +1761,12 @@ def find_semaphores_in_node(signals):
         if signals_in_node[i]["Next"] == []:
             del signals_in_node[i]["Next"]
     
+    for i in signals_in_node:
+        if signals_in_node[i]["Prev"] != []:
+            signals_in_node[i]["Prev"]  = sorted(signals_in_node[i]["Prev"] , key = lambda x: signals[x]['Position'][0],reverse=('decrease'))
+        if signals_in_node[i]["Next"] != []:
+            signals_in_node[i]["Next"]  = sorted(signals_in_node[i]["Next"] , key = lambda x: signals[x]['Position'][0])
+
     return signals_in_node
 
 # Find semaphores based on nodes
