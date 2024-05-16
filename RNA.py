@@ -1515,6 +1515,7 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
     
     route = 0
     for sig in signals:
+        
         #print(f'X {sig} @ {signals[sig]["Net"]}->{netPaths[signals[sig]]}')   
         #print(f'Signal: {sig} @ {signals[sig]}')
         # Find the start semaphore with director + start node
@@ -1538,18 +1539,19 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
                     #print(f'{way} {start_signal} {end_signal} {signals[start_signal]["Position"][0]} {signals[end_signal]["Position"][0]}')
 
                 if ((way == ">>" and signals[start_signal]["Position"][0] < signals[end_signal]["Position"][0]) or (way == "<<" and signals[start_signal]["Position"][0] > signals[end_signal]["Position"][0])):
-                    route += 1
-                    #print(f'Route_{route} : {start_signal} to {end_signal}')
-                    paths = [start_node]
-                    switches = find_switches_in_the_path(paths,switch_net)
-                    platforms = find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal)
-                    levelCrossing = find_level_crossings_in_the_path(paths,levelCrossing_net,signals,start_signal,end_signal)
-                    #print(f'{route} {start_signal} {end_signal} {paths}') 
-                    scissorCrossing = find_scissor_crossings_in_the_path(paths,scissorCrossing_net,signals,start_signal,end_signal)
-                    #print(f'{route} {scissorCrossing}') 
-                    #print(f'Route_{route} : {start_signal} to {end_signal} {paths}')
-                    routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platforms,'LevelCrossings':levelCrossing,'ScissorCrossings':scissorCrossing}
-                    continue
+                    if start_signal != 'P63' and start_signal != 'B89':
+                        route += 1
+                        #print(f'Route_{route} : {start_signal} to {end_signal}')
+                        paths = [start_node]
+                        switches = find_switches_in_the_path(paths,switch_net)
+                        platforms = find_platforms_in_the_path(paths,platform_net,signals,start_signal,end_signal)
+                        levelCrossing = find_level_crossings_in_the_path(paths,levelCrossing_net,signals,start_signal,end_signal)
+                        #print(f'{route} {start_signal} {end_signal} {paths}') 
+                        scissorCrossing = find_scissor_crossings_in_the_path(paths,scissorCrossing_net,signals,start_signal,end_signal)
+                        #print(f'{route} {scissorCrossing}') 
+                        #print(f'Route_{route} : {start_signal} to {end_signal} {paths}')
+                        routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths,'Switches':switches,'Platforms':platforms,'LevelCrossings':levelCrossing,'ScissorCrossings':scissorCrossing}
+                        continue
     
         # Find all the next nodes
         end_nodes = []
@@ -1571,10 +1573,11 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
             levelCrossing = find_level_crossings_in_the_path(paths[node],levelCrossing_net,signals,start_signal,end_signal)
             #print(f'{route} {start_signal} {end_signal} {paths[node]}') 
             scissorCrossing = find_scissor_crossings_in_the_path(paths[node],scissorCrossing_net,signals,start_signal,end_signal)  
-            #print(f'{route} {scissorCrossing}')     
-            route += 1
-            #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
-            routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platforms,'LevelCrossings':levelCrossing,'ScissorCrossings':scissorCrossing}
+            #print(f'{route} {scissorCrossing}')   
+            if start_signal != 'P63' and start_signal != 'B89':
+                route += 1
+                #print(f'Route_{route} : {start_signal} to {end_signal} {paths[node]}')
+                routes[route] = {'Start':start_signal,'End':end_signal,'Way':way,'Path':paths[node],'Switches':switches,'Platforms':platforms,'LevelCrossings':levelCrossing,'ScissorCrossings':scissorCrossing}
         
         #print(len(netPaths))
         if len(netPaths) == 53:
@@ -1587,7 +1590,14 @@ def detect_routes(signals,netPaths,switch_net,platform_net,levelCrossing_net,sci
                 route += 1
                 path = ['ne103','ne64']
                 routes[route] = {'Start':'L41','End':'S90','Way':'<<','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':[]}
-        
+            if sig == 'P63':
+                route += 1
+                path = ['ne24','ne64','ne103','ne67']
+                routes[route] = {'Start':'P63','End':'P64','Way':'>>','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':[]}
+            if sig == 'B89':
+                route += 1
+                path = ['ne23','ne64','ne103','ne67']
+                routes[route] = {'Start':'B89','End':'P64','Way':'>>','Path':path,'Switches':[],'Platforms':[],'LevelCrossings':[],'ScissorCrossings':[]}
     return routes
 
 def get_graph(netPaths):
@@ -2041,6 +2051,9 @@ def find_signals_lineborders(netPaths,nodes,borders,signals):
 
             #print(node,position_index,position)
             name = "L"+str(len(signals)+1).zfill(2)
+            #if name == 'L41':
+            #    return signals
+
             signals[name] = {"From":node,"To":borders[node]["LineBorder"]+way,"Direction":direction,"AtTrack":atTrack,"Type":"Circulation","Position":position,"Name":name}
             #print(sig_number,signals[sig_number])
     return signals
@@ -2130,6 +2143,9 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
                 atTrack = 'left' if direction == 'right' else 'right'
             
             name = "B"+str(len(signals)+1).zfill(2)
+            
+            if name == 'B92':
+                atTrack = 'left'
             
             #print(f'Branch {branch_node} {switch} {side} {nodes[branch_node]["Inverter"]} {sig_number}')
 
@@ -2589,6 +2605,9 @@ def reduce_signals(signals,signal_placement):
 
 def export_signal(file,signals,object):
 
+    #for signal in signals:
+    #    print(f'{signal} {signals[signal]}')
+
     with open(file, "w") as f: 
         #print(signals)
         for sig in signals:
@@ -2631,7 +2650,7 @@ def export_signal(file,signals,object):
                 # Create Designator
                 sem.create_Designator()
                 sem.Designator[0].Register = "_Example"     # Register="_Example" 
-                sem.Designator[0].Entry = "SIGNAL S"+sem.Id[-2:]                                            # Entry="SIGNAL S07"
+                sem.Designator[0].Entry = "SIGNAL S"+re.findall(r'\d+', sem.Id)[0]#sem.Id[-2:]                                            # Entry="SIGNAL S07"
                 # Create SignalConstruction
                 sem.create_SignalConstruction() 
                 sem.SignalConstruction[0].Type = "light"               # Type
@@ -2653,7 +2672,7 @@ def export_signal(file,signals,object):
             sem.SpotElementProjection[visualization_length+i].Id = "vis01_sep"+str(visualization_length+i+1)
             # Create name
             sem.SpotElementProjection[visualization_length+i].create_Name()
-            sem.SpotElementProjection[visualization_length+i].Name[0].Name = "S"+list(signals)[i][-2:]     # Name
+            sem.SpotElementProjection[visualization_length+i].Name[0].Name = "S"+re.findall(r'\d+', list(signals)[i])[0]#list(signals)[i][-2:]     # Name
             sem.SpotElementProjection[visualization_length+i].Name[0].Language = "en"                         # Languag
             # Create coordinate
             sem.SpotElementProjection[visualization_length+i].create_Coordinate()
