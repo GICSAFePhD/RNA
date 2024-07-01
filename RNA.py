@@ -169,11 +169,15 @@ def get_old_interlocking_table(object,example):
                     # RR NN RN NR
 
                     applicationDirection = switch.SpotLocation[0].ApplicationDirection
+                    radius_int = int(switch.TurningBranch[0].Radius)
 
-                    if applicationDirection == "reverse":
+                    #switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_3,'ne'+turning_4],'Movement_NR':['ne'+turning_1,'ne'+turning_2]}
+                    
+                    if ((applicationDirection == "reverse" and radius_int > 0) or (applicationDirection == "normal" and radius_int < 0)):
                         switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_3,'ne'+turning_4],'Movement_NR':['ne'+turning_1,'ne'+turning_2]}
                     else:
                         switch_net[switch.Name[0].Name] = {'type':'double','Movement_RR':['ne'+straight_1,'ne'+straight_2],'Movement_NN':['ne'+straight_3,'ne'+straight_4],'Movement_RN':['ne'+turning_1,'ne'+turning_2],'Movement_NR':['ne'+turning_3,'ne'+turning_4]}
+                    
     except:
         switch_net = {}
     #for i in switch_net:
