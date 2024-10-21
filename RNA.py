@@ -64,7 +64,16 @@ def RNA(RML,INPUT_FILE,OUTPUT_FILE,auto = True, test = False, config = [1,1,1,1,
     
     if test:
         print("Analyzing railML object")
-    x = analyzing_object(RML,sequence,switch_net,platform_net,levelCrossing_net,scissorCrossing_net,old_table,example,config)
+
+    distanceParameters = {
+        'bufferStopDistance': 100,
+        'lineBordersDistance': 100,
+        'railJointsDistance': 200,
+        'levelCrossingsDistance': 250,
+        'platformsDistance': 300
+    }
+    
+    x = analyzing_object(RML,sequence,switch_net,platform_net,levelCrossing_net,scissorCrossing_net,distanceParameters,old_table,example,config)
     
     # Create new signalling
     
@@ -1894,7 +1903,7 @@ def find_node_roles(switchesIS):
     return nodeRole,nodeSwitch 
 
 # Find signals for every node in the network
-def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config = [1,1,1,1,1,1]):
+def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms, distanceParameters,config = [1,1,1,1,1,1]):
     
     signals = {}
     printed_signals = []
@@ -1912,37 +1921,43 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     # Find depth of branches
     branch_depth(nodes,switchesIS,netPaths,nodeRole,nodeSwitch,trainDetectionElements,levelCrossingsIS,platforms)
 
+    bufferStopDistance = distanceParameters['bufferStopDistance']            #100
+    lineBordersDistance = distanceParameters['lineBordersDistance']          #100
+    railJointsDistance = distanceParameters['railJointsDistance']            #200
+    levelCrossingsDistance = distanceParameters['levelCrossingsDistance']    #250
+    platformsDistance = distanceParameters['platformsDistance']              #300
+
     # Find signals for bufferStops
     if(config[0]==1):
-        signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals)
+        signals = find_signals_bufferStops(netPaths,nodes,bufferStops,signals,distance = bufferStopDistance)
         printed_signals = [*signals]
         if printed_signals:
             print(f' Creating signals for bufferstops:{printed_signals}')
     
     # Find signals for lineborders
     if(config[1]==1):
-        signals = find_signals_lineborders(netPaths,nodes,borders,signals)
+        signals = find_signals_lineborders(netPaths,nodes,borders,signals,distance = lineBordersDistance)
         printed_signals = [*signals]
         if [*signals] != printed_signals:
             print(f' Creating signals for lineborders:{printed_signals}')
 
     # Find signals for railJoints
     if(config[2]==1):
-        signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals)
+        signals = find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals,distance = railJointsDistance)
         if [*signals] != printed_signals:
             print(f' Creating signals for Joints:{[x for x in [*signals] if x not in printed_signals]}')
         printed_signals = [*signals]
     
     # Find signals for level crossings
     if(config[3]==1):
-        signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals)
+        signals = find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals,distance = levelCrossingsDistance)
         if [*signals] != printed_signals:
             print(f' Creating signals for crossings:{[x for x in [*signals] if x not in printed_signals]}')
         printed_signals = [*signals]
 
     # Find signals for platforms
     if(config[4]==1):
-        signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals)
+        signals = find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals,distance = platformsDistance)
         if [*signals] != printed_signals:
             print(f' Creating signals for platforms:{[x for x in [*signals] if x not in printed_signals]}')
         printed_signals = [*signals]
@@ -1962,8 +1977,7 @@ def find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,trac
     return signals
 
 # Find signals for bufferStops
-def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
-    step = 100
+def find_signals_bufferStops(netPaths,nodes,bufferStops,signals,distance = 100):
     #print(bufferStops)
     # Find every end of the network
     for node in nodes:
@@ -1986,9 +2000,9 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
                 #print(node,netPaths[node],side,direction,nodes[node])
                 
                 if position_index == "End":
-                    position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
+                    position = [nodes[node][position_index][0]-distance,-nodes[node][position_index][1]]
                 else:
-                    position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
+                    position = [nodes[node][position_index][0]+distance,-nodes[node][position_index][1]]
                     
                 way = "_right" if position[0] < nodes[node][position_index][0] else "_left"
 
@@ -2007,8 +2021,7 @@ def find_signals_bufferStops(netPaths,nodes,bufferStops,signals):
     return signals
 
 # Find signals for lineborders
-def find_signals_lineborders(netPaths,nodes,borders,signals):
-    step = 100
+def find_signals_lineborders(netPaths,nodes,borders,signals,distance = 100):
     #print(borders)
     # Find every end of the network
     for node in nodes:
@@ -2052,9 +2065,9 @@ def find_signals_lineborders(netPaths,nodes,borders,signals):
             #print(node,netPaths[node],side,direction,nodes[node])
             
             if position_index == "End":
-                position = [nodes[node][position_index][0]-step,-nodes[node][position_index][1]]
+                position = [nodes[node][position_index][0]-distance,-nodes[node][position_index][1]]
             else:
-                position = [nodes[node][position_index][0]+step,-nodes[node][position_index][1]]
+                position = [nodes[node][position_index][0]+distance,-nodes[node][position_index][1]]
 
             way = "_right" if position[0] < nodes[node][position_index][0] else "_left"
 
@@ -2242,8 +2255,7 @@ def find_signals_switches(signal_placement,nodeRole,nodeSwitch,nodes,netPaths,sw
     return signals
 
 # Find signals for railJoints
-def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals):
-    distance = 200
+def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,signals,distance = 200):
     
     # Find every railway joint on the network
     for joint in trainDetectionElements:
@@ -2295,8 +2307,7 @@ def find_signals_joints(signal_placement,nodes,netPaths,trainDetectionElements,s
     return signals
 
 # Find signals for level crossings
-def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals):
-    distance = 250
+def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,signals,distance = 250):
     # Find every level crossing on the network
     for crossing in levelCrossingsIS:
         #print(levelCrossingsIS[crossing])
@@ -2349,8 +2360,7 @@ def find_signals_crossings(signal_placement,nodes,netPaths,levelCrossingsIS,sign
     return signals
 
 # Find signals for platforms
-def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals):
-    distance = 300
+def find_signals_platforms(signal_placement,nodes,netPaths,platforms,signals,distance = 300):
     # Find every platform on the network
     for platform in platforms:
         node = platforms[platform]["Net"] 
@@ -3159,7 +3169,7 @@ def arrow_simplification(signals,nodes,sequence):
     #    print(signal,signals[signal])    
 
 ##%%%
-def analyzing_object(object,sequence,switch_net,platform_net,levelCrossing_net,scissorCrossing_net,old_table = {},example =1,config = [1,1,1,1,1,1,1,1,1,1]):
+def analyzing_object(object,sequence,switch_net,platform_net,levelCrossing_net,scissorCrossing_net,distanceParameters,old_table = {},example =1,config = [1,1,1,1,1,1,1,1,1,1]):
     topology = object.Infrastructure.Topology
     netElements = topology.NetElements
     netRelations = topology.NetRelations.NetRelation if topology.NetRelations != None else []  
@@ -3186,7 +3196,8 @@ def analyzing_object(object,sequence,switch_net,platform_net,levelCrossing_net,s
     #print(f' Signal (possible) places:{signal_placement}')
     print(" Creating Signalling --> Signalling.RNA")
     signals_file = "App//Layouts//Example_"+str(example)+"//Dangers.RNA"
-    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,config)
+
+    signals = find_signals(safe_point_file,signal_placement,nodes,netPaths,switchesIS,tracks,trainDetectionElements,borders,bufferStops,levelCrossingsIS,platforms,distanceParameters,config)
     
     find_way(signals,nodes,config)
 
